@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="上傳菜單建立團購，或使用代碼加入點餐">
+    <title>AI 菜單點餐系統</title>
+    <link rel="stylesheet" href="/frontend/home.css">
+    <script src="/frontend/home.js" defer></script>
+  </head>
+  <body>
+    <header class="hero">
+      <div class="hero-inner">
+        <p class="eyebrow">AI 菜單點餐系統</p>
+        <h1>上傳一張菜單，大家就能一起點餐</h1>
+        <p>主揪先用 AI 讀出菜名與價格並建立團購，再把連結或 6 碼代碼分享給其他人。</p>
+      </div>
+    </header>
+
+    <main class="page-shell">
+      <section class="start-section" aria-labelledby="start-title">
+        <div class="section-heading">
+          <p>一般團購</p>
+          <h2 id="start-title">你現在要做什麼？</h2>
+        </div>
+
+        <div class="mode-grid">
+          <article class="mode-card organizer-card">
+            <p class="mode-label">我是主揪／統籌</p>
+            <h3>發起一個新團購</h3>
+            <ol class="mini-flow">
+              <li>上傳這次要訂的菜單</li>
+              <li>確認 AI 讀出的菜名與價格</li>
+              <li>取得連結與代碼，分享給大家</li>
+            </ol>
+            <a class="primary-action" href="/upload?mode=group">上傳菜單，建立團購</a>
+          </article>
+
+          <article id="join-group" class="mode-card participant-card">
+            <p class="mode-label">我是一起點餐的人</p>
+            <h3>加入已經建立的團購</h3>
+            <p>請向主揪取得 6 碼團購代碼；你不需要再上傳菜單。</p>
+            <form id="quick-join-form" class="quick-join" novalidate>
+              <label for="quick-group-code">輸入 6 碼團購代碼</label>
+              <div>
+                <input id="quick-group-code" maxlength="6" autocomplete="off" required>
+                <button type="submit">進入點餐</button>
+              </div>
+              <p id="quick-join-status" role="status" hidden></p>
+            </form>
+          </article>
+        </div>
+      </section>
+
+      <section class="shared-flow" aria-labelledby="group-flow-title">
+        <h2 id="group-flow-title">團購完整流程</h2>
+        <div class="flow-steps">
+          <p><strong>1</strong><span>主揪上傳菜單</span></p>
+          <p><strong>2</strong><span>AI 擷取菜名與價格</span></p>
+          <p><strong>3</strong><span>分享連結或代碼</span></p>
+          <p><strong>4</strong><span>大家各自點餐</span></p>
+          <p><strong>5</strong><span>主揪查看統計</span></p>
+        </div>
+      </section>
+
+      <section class="store-section" aria-labelledby="store-title">
+        <div>
+          <p class="mode-label">我是餐廳店家</p>
+          <h2 id="store-title">建立長期使用的店家菜單</h2>
+          <p>店家上傳自己的菜單，取得固定點餐網址與 QR Code。這和上面的單次團購是不同用途。</p>
+        </div>
+        <a class="store-action" href="/upload?mode=store">建立店家固定菜單</a>
+      </section>
+
+    </main>
+  </body>
+</html>

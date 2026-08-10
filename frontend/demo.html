@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="固定示範菜單點餐頁">
+    <title>示範點餐｜島味小館</title>
+    <link rel="stylesheet" href="/frontend/navigation.css">
+    <link rel="stylesheet" href="/frontend/styles.css">
+    <script src="/frontend/app.js" defer></script>
+  </head>
+  <body>
+    <nav class="top-home-nav" aria-label="主要導覽"><a href="/">首頁</a></nav>
+    <header class="site-header">
+      <div class="header-inner">
+        <p class="eyebrow">功能示範</p>
+        <h1 id="restaurant-name">餐廳菜單</h1>
+        <p class="header-note">此頁使用固定的示範菜單資料</p>
+      </div>
+    </header>
+
+    <main class="menu-shell">
+      <div id="menu-status" class="status-panel" role="status" aria-live="polite">
+        <span class="loading-dot" aria-hidden="true"></span>
+        <span>菜單載入中</span>
+      </div>
+      <div class="ordering-layout">
+        <div id="menu-content" class="menu-content" aria-label="菜單內容"></div>
+        <aside class="cart-panel" aria-labelledby="cart-title">
+          <div class="cart-heading">
+            <p>你的選擇</p>
+            <h2 id="cart-title">購物車</h2>
+          </div>
+          <p id="cart-empty" class="cart-empty">尚未選擇餐點</p>
+          <ul id="cart-items" class="cart-items" aria-live="polite"></ul>
+          <div class="cart-total-row">
+            <span>總金額</span>
+            <strong id="cart-total">NT$ 0</strong>
+          </div>
+          <form id="order-form" class="order-form" novalidate>
+            <label for="customer-name">取餐姓名</label>
+            <input id="customer-name" name="customer_name" type="text" autocomplete="name" placeholder="請輸入姓名" required>
+            <button id="submit-order" type="submit" disabled>送出訂單</button>
+            <p id="order-status" class="order-status" role="status" aria-live="polite" hidden></p>
+          </form>
+        </aside>
+      </div>
+    </main>
+
+    <footer class="site-footer">
+    </footer>
+  </body>
+</html>

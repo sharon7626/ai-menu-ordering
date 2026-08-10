@@ -1,0 +1,266 @@
+:root {
+  color-scheme: light;
+  font-family: "Microsoft JhengHei", sans-serif;
+  color: #2f2924;
+  background: #f5f0e8;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+}
+
+.site-header {
+  padding: 2.5rem 1.25rem;
+  color: #fffaf3;
+  background: #315c4b;
+}
+
+.header-inner,
+.page-shell {
+  width: min(100%, 820px);
+  margin: 0 auto;
+}
+
+.site-header p,
+.site-header h1 {
+  margin: 0;
+}
+
+.site-header p {
+  margin-bottom: 0.35rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+}
+
+.page-shell {
+  padding: 1.5rem 1.25rem 3rem;
+}
+
+.status,
+.group-heading,
+.order-card,
+.empty-orders {
+  padding: 1.25rem;
+  border: 1px solid #e0d4c4;
+  border-radius: 0.9rem;
+  background: #fffdf9;
+}
+
+.status[data-state="error"] {
+  color: #8a2f26;
+  background: #fbe5e2;
+}
+
+.group-heading {
+  margin-bottom: 1.5rem;
+}
+
+.summary-section {
+  margin-bottom: 2rem;
+}
+
+.summary-list {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.summary-item {
+  display: grid;
+  grid-template-columns: minmax(10rem, 0.75fr) minmax(15rem, 1.25fr);
+  align-items: start;
+  gap: 1rem;
+  padding: 1rem 1.25rem;
+  border: 1px solid #d8c9ba;
+  border-radius: 0.75rem;
+  background: #fffdf9;
+}
+
+.summary-item h3,
+.summary-item p {
+  margin: 0;
+}
+
+.summary-item .summary-note {
+  color: #8d3f2d;
+  font-weight: 800;
+}
+
+.summary-item p {
+  margin-top: 0.3rem;
+  color: #6d6259;
+  font-size: 0.9rem;
+}
+
+.summary-totals {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.3rem;
+  color: #8d3f2d;
+}
+
+.summary-demands {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.summary-demand {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.55rem 0.7rem;
+  border-radius: 0.5rem;
+  background: #f7f1e9;
+}
+
+.summary-demand .summary-note {
+  margin: 0;
+}
+
+.group-heading p,
+.group-heading h2 {
+  margin-top: 0;
+}
+
+#group-code {
+  color: #8d3f2d;
+  font-weight: 900;
+}
+
+#group-state {
+  display: inline-block;
+  margin-bottom: 0;
+  padding: 0.45rem 0.75rem;
+  border-radius: 999px;
+  font-weight: 900;
+}
+
+#group-state[data-state="open"] {
+  color: #245b38;
+  background: #e5f4e9;
+}
+
+#group-state[data-state="closed"] {
+  color: #8a2f26;
+  background: #fbe5e2;
+}
+
+#close-group,
+#copy-summary,
+#download-excel {
+  min-height: 2.7rem;
+  padding: 0.65rem 1rem;
+  border: 0;
+  border-radius: 0.6rem;
+  color: #fff;
+  background: #8d3f2d;
+  font: inherit;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+#download-excel {
+  background: #315c4b;
+}
+
+.summary-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+}
+
+#close-group:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.action-status {
+  margin-bottom: 0;
+  padding: 0.75rem;
+  border-radius: 0.6rem;
+}
+
+.action-status[data-state="loading"] {
+  color: #70440f;
+  background: #fff1ce;
+}
+
+.action-status[data-state="success"] {
+  color: #245b38;
+  background: #e5f4e9;
+}
+
+.action-status[data-state="error"] {
+  color: #8a2f26;
+  background: #fbe5e2;
+}
+
+.section-heading,
+.order-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.orders-list {
+  display: grid;
+  gap: 1rem;
+}
+
+.text-summary-section {
+  margin-top: 2rem;
+}
+
+#text-summary {
+  width: 100%;
+  padding: 1rem;
+  border: 1px solid #baa994;
+  border-radius: 0.7rem;
+  color: #2f2924;
+  background: #fffdf9;
+  font: inherit;
+  line-height: 1.7;
+  resize: vertical;
+}
+
+.order-card h3,
+.order-card p {
+  margin-top: 0;
+}
+
+.order-card ul {
+  padding-left: 1.4rem;
+  line-height: 1.8;
+}
+
+.order-card p {
+  margin-bottom: 0;
+  color: #6d6259;
+  font-size: 0.9rem;
+}
+
+@media (max-width: 520px) {
+  .section-heading,
+  .order-heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .summary-item {
+    grid-template-columns: 1fr;
+  }
+
+  .summary-demand {
+    grid-template-columns: 1fr;
+  }
+
+  .summary-totals {
+    justify-content: flex-start;
+  }
+}

@@ -1,0 +1,118 @@
+:root {
+  color-scheme: light;
+  font-family: "Microsoft JhengHei", sans-serif;
+  color: #2f2924;
+  background: #f5f0e8;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+}
+
+.site-header {
+  padding: 2.5rem 1.25rem;
+  color: #fffaf3;
+  background: #315c4b;
+}
+
+.header-inner,
+.page-shell {
+  width: min(100%, 680px);
+  margin: 0 auto;
+}
+
+.site-header p,
+.site-header h1 {
+  margin: 0;
+}
+
+.site-header p {
+  margin-bottom: 0.35rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+}
+
+.page-shell {
+  padding: 1.5rem 1.25rem 3rem;
+}
+
+.status,
+.order-card {
+  padding: 1.25rem;
+  border: 1px solid #e0d4c4;
+  border-radius: 1rem;
+  background: #fffdf9;
+  box-shadow: 0 0.7rem 2rem rgba(70, 45, 32, 0.07);
+}
+
+.status[data-state="error"] {
+  color: #8a2f26;
+  background: #fbe5e2;
+}
+
+.order-heading p,
+.order-heading h2 {
+  margin-top: 0;
+}
+
+.order-heading > p:first-child {
+  color: #8d3f2d;
+  font-weight: 900;
+}
+
+.order-items {
+  margin: 1.25rem 0;
+  padding: 0;
+  list-style: none;
+}
+
+.order-items li,
+.order-total {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem 0;
+  border-bottom: 1px solid #eadfd2;
+}
+
+.order-items div {
+  display: grid;
+  gap: 0.3rem;
+}
+
+.order-items span,
+.created-at {
+  color: #6d6259;
+  font-size: 0.9rem;
+}
+
+.order-items .item-note {
+  color: #8a3f29;
+  font-weight: 700;
+}
+
+.order-total {
+  color: #8d3f2d;
+  font-size: 1.15rem;
+  font-weight: 900;
+}
+
+.back-link {
+  display: block;
+  margin-top: 1.25rem;
+  color: #315c4b;
+  font-weight: 900;
+  text-align: center;
+}
+
+@media (max-width: 480px) {
+  .order-items li {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}

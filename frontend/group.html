@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="輸入團購代碼並查看本次團購菜單">
+    <title>加入團購｜AI 菜單點餐系統</title>
+    <link rel="stylesheet" href="/frontend/navigation.css">
+    <link rel="stylesheet" href="/frontend/group.css">
+    <script src="/frontend/menu-variants.js?v=20260808-1" defer></script>
+    <script src="/frontend/group.js?v=20260808-1" defer></script>
+  </head>
+  <body>
+    <nav class="top-home-nav" aria-label="主要導覽"><a href="/">首頁</a></nav>
+    <header class="site-header">
+      <div class="header-inner">
+        <p class="eyebrow">一起點餐</p>
+        <h1>加入團購</h1>
+        <p>輸入統籌分享的 6 碼代碼，即可查看這次的菜單。</p>
+      </div>
+    </header>
+
+    <main class="page-shell">
+      <section class="code-panel" aria-labelledby="code-title">
+        <h2 id="code-title">團購代碼</h2>
+        <form id="code-form" novalidate>
+          <label for="group-code">請輸入 6 碼代碼</label>
+          <div class="code-entry">
+            <input
+              id="group-code"
+              name="group-code"
+              type="text"
+              inputmode="text"
+              autocomplete="off"
+              maxlength="6"
+              aria-describedby="code-status"
+              required
+            >
+            <button type="submit">進入團購</button>
+          </div>
+          <p id="code-status" class="status" role="status" aria-live="polite" hidden></p>
+        </form>
+      </section>
+
+      <section id="menu-section" class="menu-section" aria-labelledby="restaurant-name" hidden>
+        <div class="menu-heading">
+          <p id="group-label"></p>
+          <h2 id="restaurant-name"></h2>
+        </div>
+        <p id="group-state" class="group-state" role="status" hidden></p>
+        <div class="ordering-layout">
+          <div>
+            <div id="menu-content"></div>
+            <p id="empty-menu" class="empty-menu" hidden>目前沒有可顯示的餐點</p>
+          </div>
+
+          <aside id="cart-panel" class="cart-panel" aria-labelledby="cart-title" hidden>
+            <h3 id="cart-title">你的訂單</h3>
+            <p id="cart-empty" class="cart-empty">尚未選擇餐點</p>
+            <ul id="cart-items" class="cart-items" aria-live="polite"></ul>
+            <div class="cart-total">
+              <span>總金額</span>
+              <strong id="cart-total">NT$ 0</strong>
+            </div>
+            <form id="order-form" novalidate>
+              <label for="customer-name">取餐姓名</label>
+              <input
+                id="customer-name"
+                name="customer-name"
+                type="text"
+                autocomplete="name"
+                maxlength="50"
+                placeholder="請輸入姓名"
+                required
+              >
+              <button id="submit-order" type="submit" disabled>送出訂單</button>
+              <p id="order-status" class="status" role="status" aria-live="polite" hidden></p>
+            </form>
+          </aside>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>

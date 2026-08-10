@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="統籌查看團購個人訂單">
+    <title>團購管理｜AI 菜單點餐系統</title>
+    <link rel="stylesheet" href="/frontend/navigation.css">
+    <link rel="stylesheet" href="/frontend/group-management.css">
+    <script src="/frontend/group-management.js" defer></script>
+  </head>
+  <body>
+    <nav class="top-home-nav" aria-label="主要導覽"><a href="/">首頁</a></nav>
+    <header class="site-header">
+      <div class="header-inner">
+        <p>統籌專用</p>
+        <h1>團購管理</h1>
+      </div>
+    </header>
+
+    <main class="page-shell">
+      <p id="management-status" class="status" role="status" aria-live="polite">訂單載入中</p>
+
+      <section id="management-content" hidden>
+        <div class="group-heading">
+          <p id="group-code"></p>
+          <h2 id="restaurant-name"></h2>
+          <p id="group-state"></p>
+          <button id="close-group" type="button">關閉團購</button>
+          <p id="action-status" class="action-status" role="status" aria-live="polite" hidden></p>
+        </div>
+
+        <section class="summary-section" aria-labelledby="summary-title">
+          <div class="section-heading">
+            <h2 id="summary-title">餐點彙整</h2>
+            <strong id="grand-total"></strong>
+          </div>
+          <p id="empty-summary" class="empty-orders" hidden>目前沒有可彙整的餐點。</p>
+          <div id="summary-list" class="summary-list"></div>
+        </section>
+
+        <section aria-labelledby="orders-title">
+          <div class="section-heading">
+            <h2 id="orders-title">參與者訂單</h2>
+            <strong id="order-count"></strong>
+          </div>
+          <p id="empty-orders" class="empty-orders" hidden>目前還沒有人送出訂單。</p>
+          <div id="orders-list" class="orders-list"></div>
+        </section>
+
+        <section class="text-summary-section" aria-labelledby="text-summary-title">
+          <div class="section-heading">
+            <h2 id="text-summary-title">可傳給店家的訂單摘要</h2>
+            <div class="summary-actions">
+              <button id="download-excel" type="button">下載 Excel 表格</button>
+              <button id="copy-summary" type="button">複製文字摘要</button>
+            </div>
+          </div>
+          <textarea id="text-summary" rows="12" readonly></textarea>
+        </section>
+      </section>
+    </main>
+  </body>
+</html>

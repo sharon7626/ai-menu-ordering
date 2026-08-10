@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="店家查看顧客個人訂單">
+    <title>店家訂單後台｜AI 菜單點餐系統</title>
+    <link rel="stylesheet" href="/frontend/navigation.css">
+    <link rel="stylesheet" href="/frontend/store-management.css?v=20260808-1">
+    <script src="/frontend/store-management.js?v=20260808-1" defer></script>
+  </head>
+  <body>
+    <nav class="top-home-nav" aria-label="主要導覽"><a href="/">首頁</a></nav>
+    <header class="site-header">
+      <div class="header-inner">
+        <p>店家專用</p>
+        <h1>訂單後台</h1>
+      </div>
+    </header>
+
+    <main class="page-shell">
+      <p id="management-status" class="status" role="status" aria-live="polite">訂單載入中</p>
+
+      <section id="management-content" hidden>
+        <div class="store-heading">
+          <div>
+            <p id="store-code"></p>
+            <h2 id="restaurant-name"></h2>
+            <p id="service-state"></p>
+          </div>
+          <nav aria-label="店家功能">
+            <a id="public-menu-link">查看公開菜單</a>
+            <a id="update-menu-link">更新菜單</a>
+          </nav>
+        </div>
+
+        <div class="summary-bar">
+          <strong id="order-count"></strong>
+          <strong id="grand-total"></strong>
+        </div>
+
+        <section class="item-summary-section" aria-labelledby="item-summary-title">
+          <div class="section-heading">
+            <h2 id="item-summary-title">餐點彙整</h2>
+            <button id="download-excel" type="button" disabled>下載 Excel 表格</button>
+          </div>
+          <p id="download-status" class="action-status" role="status" aria-live="polite" hidden></p>
+          <p id="empty-summary" class="empty-orders" hidden>目前沒有可彙整的餐點。</p>
+          <div id="summary-list" class="summary-list"></div>
+        </section>
+
+        <section aria-labelledby="orders-title">
+          <h2 id="orders-title">個別顧客訂單</h2>
+          <p id="empty-orders" class="empty-orders" hidden>目前還沒有顧客送出訂單。</p>
+          <div id="orders-list" class="orders-list"></div>
+        </section>
+      </section>
+    </main>
+  </body>
+</html>

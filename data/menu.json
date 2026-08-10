@@ -1,0 +1,61 @@
+{
+  "restaurant": {
+    "name": "島味小館"
+  },
+  "categories": [
+    {
+      "id": "rice-dishes",
+      "name": "飯類",
+      "items": [
+        {
+          "id": "braised-pork-rice",
+          "name": "滷肉飯",
+          "description": "香滷豬肉搭配白飯",
+          "price": 45,
+          "available": true
+        },
+        {
+          "id": "chicken-leg-rice",
+          "name": "香煎雞腿飯",
+          "description": "香煎去骨雞腿搭配時蔬",
+          "price": 120,
+          "available": true
+        },
+        {
+          "id": "vegetable-curry-rice",
+          "name": "蔬菜咖哩飯",
+          "description": "溫和咖哩搭配當季蔬菜",
+          "price": 95,
+          "available": false
+        }
+      ]
+    },
+    {
+      "id": "noodle-dishes",
+      "name": "麵類",
+      "items": [
+        {
+          "id": "beef-noodle-soup",
+          "name": "紅燒牛肉麵",
+          "description": "紅燒湯頭搭配牛肉塊",
+          "price": 150,
+          "available": true
+        },
+        {
+          "id": "sesame-noodles",
+          "name": "麻醬麵",
+          "description": "濃郁芝麻醬拌麵",
+          "price": 65,
+          "available": true
+        },
+        {
+          "id": "wonton-noodle-soup",
+          "name": "餛飩湯麵",
+          "description": "",
+          "price": 85,
+          "available": true
+        }
+      ]
+    }
+  ]
+}

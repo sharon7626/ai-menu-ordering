@@ -1,0 +1,61 @@
+{
+  "type": "object",
+  "properties": {
+    "restaurant_name": {
+      "type": ["string", "null"],
+      "description": "菜單上可辨識的餐廳名稱；無法確認時為 null。"
+    },
+    "categories": {
+      "type": "array",
+      "description": "依原菜單順序排列的分類。",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": ["string", "null"],
+            "description": "分類名稱；菜單沒有分類時可使用「未分類」，文字不清楚時為 null。"
+          },
+          "items": {
+            "type": "array",
+            "description": "依原菜單順序排列的餐點。",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": ["string", "null"],
+                  "description": "餐點名稱；無法確認時為 null。"
+                },
+                "description": {
+                  "type": "string",
+                  "description": "菜單上實際印出的簡短說明；沒有說明時為空字串。"
+                },
+                "price": {
+                  "type": ["integer", "null"],
+                  "minimum": 0,
+                  "description": "新臺幣整數價格；多種規格價格須拆成名稱含規格的獨立品項，只有原圖真的無法確認時為 null。"
+                }
+              },
+              "required": ["name", "description", "price"],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": ["name", "items"],
+        "additionalProperties": false
+      }
+    },
+    "needs_review": {
+      "type": "boolean",
+      "description": "只要有任何欄位不清楚、缺漏或需要人工判斷即為 true。"
+    },
+    "warnings": {
+      "type": "array",
+      "description": "需要店家注意或修正的繁體中文說明。",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "required": ["restaurant_name", "categories", "needs_review", "warnings"],
+  "additionalProperties": false
+}

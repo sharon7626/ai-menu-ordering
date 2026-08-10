@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="查看自己的個人訂單">
+    <title>我的訂單｜AI 菜單點餐系統</title>
+    <link rel="stylesheet" href="/frontend/navigation.css">
+    <link rel="stylesheet" href="/frontend/personal-order.css">
+    <script src="/frontend/personal-order.js" defer></script>
+  </head>
+  <body>
+    <nav class="top-home-nav" aria-label="主要導覽"><a href="/">首頁</a></nav>
+    <header class="site-header">
+      <div class="header-inner">
+        <p id="order-mode-label">個人訂單</p>
+        <h1>我的訂單</h1>
+      </div>
+    </header>
+
+    <main class="page-shell">
+      <p id="order-status" class="status" role="status" aria-live="polite">訂單載入中</p>
+
+      <article id="order-card" class="order-card" hidden>
+        <div class="order-heading">
+          <p id="restaurant-name"></p>
+          <h2 id="order-number"></h2>
+          <p>取餐姓名：<strong id="customer-name"></strong></p>
+        </div>
+        <ul id="order-items" class="order-items"></ul>
+        <div class="order-total">
+          <span>總金額</span>
+          <strong id="total-amount"></strong>
+        </div>
+        <p id="created-at" class="created-at"></p>
+        <a id="back-to-group" class="back-link">返回菜單</a>
+      </article>
+    </main>
+  </body>
+</html>

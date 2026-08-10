@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="店家固定線上菜單">
+    <title>店家菜單｜AI 菜單點餐系統</title>
+    <link rel="stylesheet" href="/frontend/navigation.css">
+    <link rel="stylesheet" href="/frontend/store.css">
+    <script src="/frontend/menu-variants.js?v=20260808-1" defer></script>
+    <script src="/frontend/store.js?v=20260808-1" defer></script>
+  </head>
+  <body>
+    <nav class="top-home-nav" aria-label="主要導覽"><a href="/">首頁</a></nav>
+    <header class="site-header">
+      <div class="header-inner">
+        <p class="eyebrow">店家線上菜單</p>
+        <h1 id="restaurant-name">菜單載入中</h1>
+        <p>固定網址會顯示店家目前供應的菜單。</p>
+      </div>
+    </header>
+
+    <main class="page-shell">
+      <p id="store-status" class="status" role="status" aria-live="polite">菜單載入中</p>
+
+      <div id="store-content" class="store-layout" hidden>
+        <section aria-label="店家菜單">
+          <p id="service-state" class="service-state"></p>
+          <div id="menu-content"></div>
+          <p id="empty-menu" class="empty-menu" hidden>目前沒有可顯示的餐點</p>
+        </section>
+
+        <div class="side-column">
+          <aside id="cart-panel" class="cart-panel" aria-labelledby="cart-title">
+            <h2 id="cart-title">我的餐點</h2>
+            <p id="cart-empty">尚未選擇餐點</p>
+            <ul id="cart-items" class="cart-items"></ul>
+            <div class="cart-total">
+              <span>總金額</span>
+              <strong id="cart-total">NT$ 0</strong>
+            </div>
+            <form id="order-form">
+              <label for="customer-name">取餐姓名</label>
+              <input id="customer-name" name="customer-name" maxlength="50" autocomplete="name" required>
+              <button id="submit-order" type="submit" disabled>送出訂單</button>
+            </form>
+            <p id="order-status" class="order-status" role="status" aria-live="polite" hidden></p>
+          </aside>
+
+          <aside class="qr-panel" aria-labelledby="qr-title">
+            <h2 id="qr-title">分享這家店</h2>
+            <img id="store-qr" alt="店家固定菜單 QR Code">
+            <p>此 QR Code 只包含公開菜單網址，不含店家管理權限。</p>
+            <a id="public-link">開啟固定菜單網址</a>
+          </aside>
+        </div>
+      </div>
+    </main>
+  </body>
+</html>

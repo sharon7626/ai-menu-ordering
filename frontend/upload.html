@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="上傳菜單圖片或一頁式 PDF">
+    <title>上傳菜單｜AI 菜單點餐系統</title>
+    <link rel="stylesheet" href="/frontend/navigation.css">
+    <link rel="stylesheet" href="./upload.css?v=20260808-1">
+    <script src="./menu-variants.js?v=20260808-1" defer></script>
+    <script src="./upload.js?v=20260808-2" defer></script>
+  </head>
+  <body>
+    <nav class="top-home-nav" aria-label="主要導覽"><a href="/">首頁</a></nav>
+    <header class="site-header">
+      <div class="header-inner">
+        <p class="eyebrow">菜單工具</p>
+        <h1>上傳菜單</h1>
+        <p>選擇一張清楚的菜單圖片或一頁式 PDF。</p>
+      </div>
+    </header>
+
+    <main class="upload-shell">
+      <section class="upload-panel" aria-labelledby="upload-title">
+        <div class="panel-heading">
+          <p>第一步</p>
+          <h2 id="upload-title">選擇菜單檔案</h2>
+        </div>
+
+        <form id="upload-form" novalidate>
+          <label class="file-picker" for="menu-file">
+            <span class="file-picker-title">選擇檔案</span>
+            <span class="file-picker-note">JPG、PNG 或一頁式 PDF，檔案上限 10 MB</span>
+          </label>
+          <input
+            id="menu-file"
+            name="file"
+            type="file"
+            accept=".jpg,.jpeg,.png,.pdf,image/jpeg,image/png,application/pdf"
+          >
+
+          <div id="file-summary" class="file-summary" hidden>
+            <span id="file-name"></span>
+            <span id="file-size"></span>
+          </div>
+
+          <section id="menu-preview-panel" class="menu-preview-panel" aria-labelledby="menu-preview-title" hidden>
+            <div class="menu-preview-heading">
+              <div>
+                <h3 id="menu-preview-title">菜單預覽</h3>
+                <p id="crop-help">確認圖片清楚後即可辨識；也可以只選取這次要辨識的區域。</p>
+              </div>
+              <button id="start-crop" type="button">選取辨識範圍</button>
+            </div>
+            <div class="menu-preview-stage">
+              <canvas id="menu-preview-canvas" aria-label="已選擇的菜單圖片"></canvas>
+              <object id="pdf-preview" type="application/pdf" aria-label="已選擇的 PDF 菜單" hidden></object>
+            </div>
+            <div id="crop-actions" class="crop-actions" hidden>
+              <button id="apply-crop" type="button" disabled>使用框選範圍</button>
+              <button id="cancel-crop" type="button">取消框選</button>
+            </div>
+            <button id="reset-crop" class="reset-crop" type="button" hidden>還原整張圖片</button>
+          </section>
+
+          <button id="upload-button" type="submit" disabled>上傳並辨識</button>
+          <p id="upload-status" class="upload-status" role="status" aria-live="polite" hidden></p>
+        </form>
+
+        <section id="recognition-result" class="recognition-result" aria-labelledby="recognition-title" hidden>
+          <h2 id="recognition-title">AI 辨識結果</h2>
+          <p class="recognition-intro">AI 會自動帶入原菜單的菜名與價格；若菜單沒有店名，可以手動輸入餐廳名稱。團購模式的餐點價格不可修改，主揪只要取消勾選這次不提供的品項；若菜名或價格辨識有誤，請換較清楚的圖片重新辨識。</p>
+          <div id="recognition-warnings"></div>
+          <form id="review-form" novalidate>
+            <div id="recognition-content"></div>
+            <div class="confirmation-actions">
+              <button id="confirm-button" type="submit" data-action="group">確認並建立團購</button>
+              <button id="store-button" type="submit" data-action="store">確認並建立店家固定菜單</button>
+            </div>
+            <p id="review-status" class="review-status" role="status" aria-live="polite" hidden></p>
+          </form>
+
+          <section id="group-created" class="group-created" aria-labelledby="group-created-title" hidden>
+            <h3 id="group-created-title">團購建立完成</h3>
+            <p><strong>你是主揪。</strong>現在把參與連結或 6 碼代碼分享給一起點餐的人；他們不需要再上傳菜單。</p>
+            <dl>
+              <div>
+                <dt>團購代碼</dt>
+                <dd id="group-code"></dd>
+              </div>
+              <div>
+                <dt>參與者連結</dt>
+                <dd><a id="participant-link"></a></dd>
+              </div>
+              <div class="management-link-row">
+                <dt>統籌管理連結（請勿分享）</dt>
+                <dd><a id="management-link"></a></dd>
+              </div>
+            </dl>
+            <div class="created-actions">
+              <a id="open-participant-link" class="created-primary-action">先查看大家會看到的點餐頁</a>
+              <button id="copy-group-code" type="button">複製 6 碼團購代碼</button>
+              <a id="open-management-link" class="created-secondary-action">進入統籌管理頁</a>
+            </div>
+            <p id="copy-code-status" class="copy-code-status" role="status" aria-live="polite" hidden></p>
+            <p class="private-link-note">管理連結只在建立成功時提供，請由統籌自行保存，不要貼到公開群組。</p>
+          </section>
+
+          <section id="store-created" class="group-created" aria-labelledby="store-created-title" hidden>
+            <h3 id="store-created-title">店家固定菜單建立完成</h3>
+            <p>固定公開網址在菜單更新後仍保持不變，可提供給顧客使用。</p>
+            <dl>
+              <div>
+                <dt>固定公開網址</dt>
+                <dd><a id="store-public-link"></a></dd>
+              </div>
+              <div>
+                <dt>店家管理連結（請勿分享）</dt>
+                <dd><a id="store-management-link"></a></dd>
+              </div>
+              <div>
+                <dt>更新菜單連結（請勿分享）</dt>
+                <dd><a id="store-update-link"></a></dd>
+              </div>
+            </dl>
+            <p class="private-link-note">管理及更新連結包含私密權限，請由店家自行保存，不要放進公開 QR Code。</p>
+          </section>
+        </section>
+
+        <div class="scope-note">
+          <h3>這一步會做什麼？</h3>
+          <p id="scope-description">系統會先檢查檔案，再由 AI 擷取分類、品項名稱與價格。確認後可建立一次性團購，或建立店家長期使用的固定菜單。</p>
+        </div>
+      </section>
+
+    </main>
+  </body>
+</html>

@@ -1,0 +1,4 @@
+interface:
+  display_name: "引導式 MVP 開發"
+  short_description: "依專案文件與 Todo 引導初學者逐步完成可驗收的 MVP 任務"
+  default_prompt: "使用 $guided-mvp-development 依專案 Todo 完成下一個可獨立驗收的小任務。"

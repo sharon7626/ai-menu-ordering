@@ -1,0 +1,401 @@
+:root {
+  color-scheme: light;
+  font-family: "Microsoft JhengHei", sans-serif;
+  color: #2f2924;
+  background: #f5f0e8;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+}
+
+.site-header {
+  padding: 3rem 1.25rem 2.5rem;
+  color: #fffaf3;
+  background: #315c4b;
+}
+
+.header-inner,
+.page-shell {
+  width: min(100%, 960px);
+  margin: 0 auto;
+}
+
+.eyebrow,
+.site-header h1,
+.site-header p:last-child {
+  margin: 0;
+}
+
+.eyebrow {
+  margin-bottom: 0.4rem;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+}
+
+.site-header p:last-child {
+  margin-top: 0.75rem;
+  color: #dcebe3;
+}
+
+.page-shell {
+  padding: 1.5rem 1.25rem 3rem;
+}
+
+.status,
+.qr-panel,
+.cart-panel,
+.menu-item {
+  border: 1px solid #e0d4c4;
+  border-radius: 0.9rem;
+  background: #fffdf9;
+}
+
+.status {
+  padding: 1.25rem;
+}
+
+.status[data-state="error"] {
+  color: #8a2f26;
+  background: #fbe5e2;
+}
+
+.store-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 260px;
+  gap: 1.5rem;
+  align-items: start;
+}
+
+.service-state {
+  display: inline-block;
+  margin: 0 0 1rem;
+  padding: 0.5rem 0.8rem;
+  border-radius: 999px;
+  font-weight: 900;
+}
+
+.service-state[data-state="active"] {
+  color: #245b38;
+  background: #e5f4e9;
+}
+
+.service-state[data-state="inactive"] {
+  color: #8a2f26;
+  background: #fbe5e2;
+}
+
+.menu-category {
+  margin-bottom: 2rem;
+}
+
+.menu-category > h2 {
+  padding-bottom: 0.55rem;
+  border-bottom: 2px solid #d5b9a7;
+  color: #783523;
+}
+
+.menu-items {
+  display: grid;
+  overflow: hidden;
+  border: 1px solid #e0d4c4;
+  border-radius: 0.8rem;
+}
+
+.menu-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.5rem 0.8rem;
+  padding: 0.75rem 0.85rem;
+  border: 0;
+  border-bottom: 1px solid #e8dfd6;
+  border-radius: 0;
+}
+
+.menu-item:last-child {
+  border-bottom: 0;
+}
+
+.menu-variant-item {
+  grid-template-columns: minmax(8rem, 0.7fr) minmax(20rem, 1.6fr);
+  align-items: start;
+}
+
+.menu-variant-name {
+  margin: 0;
+  padding-top: 0.35rem;
+}
+
+.menu-variant-options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(9rem, 1fr));
+  gap: 0.65rem;
+}
+
+.menu-variant-option {
+  display: grid;
+  gap: 0.4rem;
+  min-width: 0;
+  padding: 0.55rem 0.65rem;
+  border-radius: 0.55rem;
+  background: #f8f3ed;
+}
+
+.variant-summary {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  color: #8d3f2d;
+}
+
+.menu-variant-option .item-note-field {
+  grid-column: auto;
+}
+
+.variant-unavailable {
+  color: #8a2f26;
+  font-size: 0.85rem;
+  font-weight: 800;
+}
+
+.menu-item h3,
+.menu-item p {
+  margin: 0;
+}
+
+.menu-item p {
+  margin-top: 0.35rem;
+  color: #6d6259;
+  line-height: 1.5;
+}
+
+.price-area strong {
+  color: #8d3f2d;
+  white-space: nowrap;
+}
+
+.price-area {
+  display: grid;
+  gap: 0.4rem;
+  justify-items: end;
+}
+
+.price-area span {
+  color: #8a2f26;
+  font-weight: 900;
+}
+
+.menu-item.is-unavailable {
+  background: #f4f1ec;
+}
+
+.side-column {
+  position: sticky;
+  top: 1rem;
+  display: grid;
+  gap: 1rem;
+}
+
+.qr-panel,
+.cart-panel {
+  padding: 1.25rem;
+}
+
+.qr-panel {
+  text-align: center;
+}
+
+.qr-panel h2 {
+  margin-top: 0;
+}
+
+#store-qr {
+  display: block;
+  width: min(100%, 220px);
+  height: auto;
+  margin: 0 auto;
+  background: #fff;
+}
+
+.qr-panel p,
+.qr-panel a {
+  overflow-wrap: anywhere;
+  line-height: 1.6;
+}
+
+.qr-panel a {
+  color: #315c4b;
+  font-weight: 900;
+}
+
+.empty-menu {
+  padding: 1.25rem;
+  color: #6d6259;
+  text-align: center;
+}
+
+.quantity-control {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  justify-content: flex-end;
+  margin-top: 0.35rem;
+}
+
+.quantity-control button {
+  width: 2rem;
+  height: 2rem;
+  border: 0;
+  border-radius: 50%;
+  color: #fff;
+  background: #315c4b;
+  font-size: 1.15rem;
+  cursor: pointer;
+}
+
+.quantity-control button:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+.quantity-control output {
+  min-width: 1.2rem;
+  font-weight: 900;
+  text-align: center;
+}
+
+.item-note-field {
+  display: grid;
+  gap: 0.35rem;
+  grid-column: 1 / -1;
+  margin-top: 0.1rem;
+  color: #62564d;
+  font-size: 0.85rem;
+  font-weight: 800;
+}
+
+.item-note-field[hidden] {
+  display: none;
+}
+
+.item-note-field input {
+  width: 100%;
+  min-height: 2.4rem;
+  border: 1px solid #cdbfaf;
+  border-radius: 0.55rem;
+  background: #fff;
+  padding: 0.5rem 0.65rem;
+  color: #2e2722;
+  font: inherit;
+  font-weight: 500;
+}
+
+.item-note-field input:focus {
+  outline: 3px solid rgba(120, 53, 35, 0.16);
+  border-color: #783523;
+}
+
+.cart-panel h2,
+.cart-panel p {
+  margin-top: 0;
+}
+
+.cart-items {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.cart-items li,
+.cart-total {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.8rem;
+  padding: 0.75rem 0;
+  border-bottom: 1px solid #eadfd2;
+}
+
+.cart-total {
+  margin-bottom: 1rem;
+  color: #8d3f2d;
+  font-weight: 900;
+}
+
+#order-form {
+  display: grid;
+  gap: 0.55rem;
+}
+
+#order-form label {
+  font-weight: 900;
+}
+
+#order-form input,
+#order-form button {
+  width: 100%;
+  padding: 0.75rem;
+  border-radius: 0.55rem;
+  font: inherit;
+}
+
+#order-form input {
+  border: 1px solid #b9ad9f;
+}
+
+#order-form button {
+  border: 0;
+  color: #fff;
+  background: #8d3f2d;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+#order-form button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.order-status {
+  margin: 1rem 0 0;
+  padding: 0.75rem;
+  border-radius: 0.55rem;
+  overflow-wrap: anywhere;
+}
+
+.order-status[data-state="success"] {
+  color: #245b38;
+  background: #e5f4e9;
+}
+
+.order-status[data-state="error"] {
+  color: #8a2f26;
+  background: #fbe5e2;
+}
+
+@media (max-width: 760px) {
+  .store-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .side-column {
+    position: sticky;
+    top: 0.5rem;
+    z-index: 2;
+    order: -1;
+  }
+}
+
+@media (max-width: 520px) {
+  .menu-variant-item {
+    grid-template-columns: 1fr;
+  }
+
+  .menu-variant-options {
+    grid-template-columns: 1fr 1fr;
+  }
+}

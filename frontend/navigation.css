@@ -1,0 +1,29 @@
+.top-home-nav {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  padding: 0.65rem 1rem;
+  border-bottom: 1px solid #ded4c8;
+  background: rgba(255, 253, 249, 0.97);
+  box-shadow: 0 0.2rem 0.8rem rgba(47, 41, 36, 0.08);
+}
+
+.top-home-nav a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.5rem;
+  padding: 0.55rem 1rem;
+  border: 1px solid #315c4b;
+  border-radius: 0.6rem;
+  color: #315c4b;
+  background: #fff;
+  font-family: "Microsoft JhengHei", sans-serif;
+  font-weight: 900;
+  text-decoration: none;
+}
+
+.top-home-nav a:hover,
+.top-home-nav a:focus-visible {
+  color: #fff;
+  background: #315c4b;
+}
