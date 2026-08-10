@@ -383,10 +383,10 @@ body {
   }
 
   .side-column {
-    position: sticky;
-    top: 0.5rem;
-    z-index: 2;
-    order: -1;
+    position: static;
+    top: auto;
+    z-index: auto;
+    order: 0;
   }
 }
 

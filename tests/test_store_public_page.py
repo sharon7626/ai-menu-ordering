@@ -110,6 +110,20 @@ class StorePublicPageTests(unittest.TestCase):
         self.assertEqual(menu_response.status_code, 404)
         self.assertEqual(qr_response.status_code, 404)
 
+    def test_mobile_store_sidebar_does_not_cover_the_menu(self) -> None:
+        stylesheet_path = Path(__file__).parents[1] / "frontend" / "store.css"
+        page_path = Path(__file__).parents[1] / "frontend" / "store.html"
+        stylesheet = stylesheet_path.read_text(encoding="utf-8")
+        page = page_path.read_text(encoding="utf-8")
+        mobile_rules = stylesheet.split("@media (max-width: 760px)", 1)[1].split(
+            "@media", 1
+        )[0]
+
+        self.assertIn("position: static;", mobile_rules)
+        self.assertIn("order: 0;", mobile_rules)
+        self.assertNotIn("position: sticky;", mobile_rules)
+        self.assertIn("/frontend/store.css?v=20260810-1", page)
+
 
 if __name__ == "__main__":
     unittest.main()
