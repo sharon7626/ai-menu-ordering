@@ -2,6 +2,10 @@ const statusPanel = document.querySelector("#my-menus-status");
 const content = document.querySelector("#my-menus-content");
 const list = document.querySelector("#my-menus-list");
 const empty = document.querySelector("#my-menus-empty");
+const claimForm = document.querySelector("#menu-store-claim-form");
+const claimInput = document.querySelector("#menu-store-management-url");
+const claimButton = document.querySelector("#menu-store-claim-button");
+const claimStatus = document.querySelector("#menu-store-claim-status");
 
 async function authHeaders() {
   return window.AppAuth?.getAuthorizationHeaders
@@ -83,6 +87,48 @@ async function createGroup(menuId, button) {
   }
 }
 
+function parseStoreManagementUrl(rawValue) {
+  let url;
+  try {
+    url = new URL(rawValue);
+  } catch {
+    throw new Error("請貼上完整的店家管理網址。");
+  }
+  if (url.origin !== window.location.origin) {
+    throw new Error("請使用目前席間網站產生的店家管理網址。");
+  }
+  const match = url.pathname.match(/^\/stores\/([a-z0-9-]+)\/(?:manage|menu-update)\/?$/i);
+  const token = new URLSearchParams(url.hash.slice(1)).get("token");
+  if (!match || !token) {
+    throw new Error("這個網址缺少店家管理資訊，請複製包含 #token= 的完整網址。");
+  }
+  return { publicSlug: match[1].toLowerCase(), managementToken: token };
+}
+
+async function claimStore(event) {
+  event.preventDefault();
+  claimButton.disabled = true;
+  claimStatus.textContent = "正在確認店家管理權限…";
+  try {
+    const { publicSlug, managementToken } = parseStoreManagementUrl(claimInput.value.trim());
+    const headers = await authHeaders();
+    headers["X-Management-Token"] = managementToken;
+    const response = await fetch(`/api/me/stores/${publicSlug}/claim`, {
+      method: "POST",
+      headers,
+    });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.detail || "無法認領這個店家，請確認管理連結是否正確。");
+    claimInput.value = "";
+    claimStatus.textContent = "固定菜單已加入我的菜單，可以從上方進入調整。";
+    await loadMenus();
+  } catch (error) {
+    claimStatus.textContent = error.message || "店家固定菜單暫時無法加入。";
+  } finally {
+    claimButton.disabled = false;
+  }
+}
+
 async function loadMenus() {
   try {
     const headers = await authHeaders();
@@ -96,4 +142,5 @@ async function loadMenus() {
   }
 }
 
+claimForm.addEventListener("submit", claimStore);
 loadMenus();

@@ -7,11 +7,11 @@
     <title>上傳菜單｜席間</title>
     <link rel="stylesheet" href="/frontend/design-system.css?v=20260811-1">
     <link rel="stylesheet" href="/frontend/navigation.css?v=20260811-3">
-    <link rel="stylesheet" href="./upload.css?v=20260808-1">
+    <link rel="stylesheet" href="./upload.css?v=20260812-1">
     <link rel="stylesheet" href="/frontend/brand-pages.css?v=20260811-2">
     <script src="./menu-variants.js?v=20260808-1" defer></script>
     <script src="/frontend/auth.js?v=20260811-1" type="module"></script>
-    <script src="./upload.js?v=20260811-4" defer></script>
+    <script src="./upload.js?v=20260812-1" defer></script>
   </head>
   <body>
     <nav class="top-home-nav" aria-label="主要導覽"><a class="top-home-brand" href="/" aria-label="席間首頁"><span class="top-home-brand-mark" aria-hidden="true">席</span><span class="top-home-brand-name">席間<small>MENU · ORDER · TOGETHER</small></span></a></nav>
@@ -43,6 +43,19 @@
           <p>第一步</p>
           <h2 id="upload-title">選擇菜單檔案</h2>
         </div>
+
+        <section id="store-update-options" class="store-update-options" aria-labelledby="store-update-options-title" hidden>
+          <div>
+            <p class="store-update-kicker">固定菜單調整</p>
+            <h3 id="store-update-options-title">選擇這次的更新方式</h3>
+            <p>可以直接修改目前菜單，也可以上傳一張全新的菜單重新辨識。</p>
+          </div>
+          <div class="store-update-choice" role="group" aria-label="固定菜單更新方式">
+            <button id="edit-current-menu" type="button" aria-pressed="true">直接修改目前菜單</button>
+            <button id="upload-new-menu" type="button" aria-pressed="false">上傳全新菜單</button>
+          </div>
+          <p id="current-menu-status" class="current-menu-status" role="status" aria-live="polite"></p>
+        </section>
 
         <form id="upload-form" novalidate>
           <label id="file-drop-zone" class="file-picker" for="menu-file">

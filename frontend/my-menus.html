@@ -7,10 +7,10 @@
     <title>我的菜單｜席間</title>
     <link rel="stylesheet" href="/frontend/design-system.css?v=20260811-1">
     <link rel="stylesheet" href="/frontend/navigation.css?v=20260811-3">
-    <link rel="stylesheet" href="/frontend/my.css">
+    <link rel="stylesheet" href="/frontend/my.css?v=20260812-3">
     <link rel="stylesheet" href="/frontend/brand-pages.css?v=20260811-1">
     <script src="/frontend/auth.js?v=20260811-1" type="module"></script>
-    <script src="/frontend/my-menus.js?v=20260812-1" type="module"></script>
+    <script src="/frontend/my-menus.js?v=20260812-2" type="module"></script>
   </head>
   <body>
     <nav class="top-home-nav" aria-label="主要導覽"><a class="top-home-brand" href="/" aria-label="席間首頁"><span class="top-home-brand-mark" aria-hidden="true">席</span><span class="top-home-brand-name">席間<small>MENU · ORDER · TOGETHER</small></span></a></nav>
@@ -23,6 +23,18 @@
       <section id="my-menus-content" hidden>
         <div id="my-menus-list" class="my-list"></div>
         <div id="my-menus-empty" class="my-empty" hidden><h2>還沒有已保存的菜單</h2><p>登入後建立新團購或店家固定菜單，之後就能從這裡再次使用或調整。</p></div>
+        <details class="my-claim-panel">
+          <summary>找回以前建立的店家固定菜單</summary>
+          <p>如果固定菜單是在登入功能完成前建立，請貼入原本的完整店家管理連結。確認管理權限後，菜單會以「店家固定菜單」顯示在上方，並可進入調整。</p>
+          <form id="menu-store-claim-form" class="my-claim-form">
+            <label for="menu-store-management-url">完整店家管理連結</label>
+            <div class="my-claim-controls">
+              <input id="menu-store-management-url" type="password" inputmode="url" autocomplete="off" placeholder="https://…/stores/…/manage#token=…" required>
+              <button id="menu-store-claim-button" type="submit">加入我的菜單</button>
+            </div>
+            <p id="menu-store-claim-status" class="my-copy-status" role="status" aria-live="polite"></p>
+          </form>
+        </details>
       </section>
     </main>
   </body>

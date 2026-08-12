@@ -226,7 +226,7 @@ class ItemNoteTests(unittest.TestCase):
         self.assertIn("請先手動輸入名稱", upload_js)
         self.assertIn("若菜單沒有店名，可以手動輸入餐廳名稱", upload_html)
         self.assertIn("menu-variants.js?v=20260808-1", upload_html)
-        self.assertIn("upload.js?v=20260811-4", upload_html)
+        self.assertIn("upload.js?v=20260812-1", upload_html)
 
     def test_review_has_compact_filters_and_groups_store_sizes(self) -> None:
         project_root = Path(__file__).resolve().parent.parent

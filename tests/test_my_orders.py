@@ -163,13 +163,19 @@ class MyOrdersTests(unittest.TestCase):
                 page = client.get("/me/orders")
         self.assertEqual(page.status_code, 200)
         self.assertIn("我的訂單", page.text)
+        self.assertIn("我的店家固定菜單", page.text)
+        self.assertIn("我送出的訂單", page.text)
+        self.assertIn("找回以前建立的店家固定菜單", page.text)
         self.assertIn(
-            '<script src="/frontend/my-orders.js?v=20260811-3" type="module"></script>',
+            '<script src="/frontend/my-orders.js?v=20260812-4" type="module"></script>',
             page.text,
         )
         script = Path("frontend/my-orders.js").read_text(encoding="utf-8")
         self.assertIn("封存訂單", script)
         self.assertIn("恢復訂單", script)
+        self.assertIn('fetch("/api/me/menus"', script)
+        self.assertIn("店家固定菜單", script)
+        self.assertIn("X-Management-Token", script)
 
 
 if __name__ == "__main__":

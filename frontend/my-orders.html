@@ -7,30 +7,66 @@
     <title>我的訂單｜席間</title>
     <link rel="stylesheet" href="/frontend/design-system.css?v=20260811-1">
     <link rel="stylesheet" href="/frontend/navigation.css?v=20260811-3">
-    <link rel="stylesheet" href="/frontend/my.css?v=20260811-2">
+    <link rel="stylesheet" href="/frontend/my.css?v=20260812-3">
     <link rel="stylesheet" href="/frontend/brand-pages.css?v=20260811-1">
     <script src="/frontend/auth.js?v=20260811-1" type="module"></script>
-    <script src="/frontend/my-orders.js?v=20260811-3" type="module"></script>
+    <script src="/frontend/my-orders.js?v=20260812-4" type="module"></script>
   </head>
   <body>
     <nav class="top-home-nav" aria-label="主要導覽"><a class="top-home-brand" href="/" aria-label="席間首頁"><span class="top-home-brand-mark" aria-hidden="true">席</span><span class="top-home-brand-name">席間<small>MENU · ORDER · TOGETHER</small></span></a></nav>
     <header class="my-header">
       <p>帳號專區</p>
       <h1>我的訂單</h1>
-      <p>登入後送出的團購與店家訂單，都能跨裝置從這裡找回。</p>
+      <p>從這裡管理自己的店家固定菜單，也能找回登入後送出的團購與店家訂單。</p>
     </header>
     <main class="my-shell">
-      <p id="my-orders-status" class="my-status" role="status" aria-live="polite">訂單載入中</p>
+      <p id="my-orders-status" class="my-status" role="status" aria-live="polite">資料載入中</p>
       <section id="my-orders-content" hidden>
-        <div class="my-view-toggle" role="group" aria-label="訂單顯示範圍">
-          <button type="button" data-archive-view="current" aria-pressed="true">目前訂單</button>
-          <button type="button" data-archive-view="archived" aria-pressed="false">已封存</button>
-        </div>
-        <div id="my-orders-list" class="my-list"></div>
-        <div id="my-orders-empty" class="my-empty" hidden>
-          <h2 id="my-orders-empty-title">還沒有已保存的訂單</h2>
-          <p id="my-orders-empty-copy">登入狀態下完成送單，之後就能從這裡跨裝置找回。</p>
-        </div>
+        <section class="my-account-section" aria-labelledby="my-stores-title">
+          <div class="my-section-heading">
+            <div>
+              <p class="my-section-eyebrow">SHOP MENU</p>
+              <h2 id="my-stores-title">我的店家固定菜單</h2>
+              <p>調整菜單、開啟顧客點餐頁，或查看店家收到的訂單。</p>
+            </div>
+          </div>
+          <div id="my-stores-list" class="my-list"></div>
+          <div id="my-stores-empty" class="my-empty" hidden>
+            <h3>目前還沒有綁定的店家固定菜單</h3>
+            <p>登入狀態下建立的新店家會自動出現在這裡；以前建立的店家需使用原本的完整管理連結認領一次。</p>
+          </div>
+          <details class="my-claim-panel">
+            <summary>找回以前建立的店家固定菜單</summary>
+            <p>請從瀏覽器紀錄開啟原本的店家管理頁，再複製網址列中的完整網址貼到下方。私密管理碼不會顯示在畫面或儲存於瀏覽器。</p>
+            <form id="store-claim-form" class="my-claim-form">
+              <label for="store-management-url">完整店家管理連結</label>
+              <div class="my-claim-controls">
+                <input id="store-management-url" type="password" inputmode="url" autocomplete="off" placeholder="https://…/stores/…/manage#token=…" required>
+                <button id="store-claim-button" type="submit">儲存到我的帳號</button>
+              </div>
+              <p id="store-claim-status" class="my-copy-status" role="status" aria-live="polite"></p>
+            </form>
+          </details>
+        </section>
+
+        <section class="my-account-section" aria-labelledby="my-personal-orders-title">
+          <div class="my-section-heading">
+            <div>
+              <p class="my-section-eyebrow">MY ORDERS</p>
+              <h2 id="my-personal-orders-title">我送出的訂單</h2>
+              <p>不論取餐姓名填什麼，只要登入這個帳號送單，都會保存在這裡。</p>
+            </div>
+            <div class="my-view-toggle" role="group" aria-label="訂單顯示範圍">
+              <button type="button" data-archive-view="current" aria-pressed="true">目前訂單</button>
+              <button type="button" data-archive-view="archived" aria-pressed="false">已封存</button>
+            </div>
+          </div>
+          <div id="my-orders-list" class="my-list"></div>
+          <div id="my-orders-empty" class="my-empty" hidden>
+            <h3 id="my-orders-empty-title">還沒有已保存的訂單</h3>
+            <p id="my-orders-empty-copy">登入狀態下完成送單，之後就能從這裡跨裝置找回。</p>
+          </div>
+        </section>
       </section>
     </main>
   </body>

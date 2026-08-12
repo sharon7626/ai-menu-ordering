@@ -320,6 +320,11 @@ Firebase Token 驗證 → 使用者資料與選填關聯 → 登入建立／送�
 - 2026-08-12 已在 Render 正式 Web Service 保留既有 `DATABASE_URL`／`GEMINI_API_KEY`，加入 `FIREBASE_PROJECT_ID`、`FIREBASE_WEB_API_KEY`、`FIREBASE_AUTH_DOMAIN`、`FIREBASE_APP_ID` 與 `FIREBASE_SERVICE_ACCOUNT_JSON`；所有值由使用者直接貼入 Render，未進入 Repository 或對話。設定儲存後舊版重新建置成功並恢復 Live，新版仍未 commit 或 push。
 - 「我的菜單」已補足店家固定菜單：登入建立時以可為空的 `store_profiles.owner_user_id` 安全綁定，卡片明確標示「店家固定菜單」，並提供調整固定菜單、店家訂單與公開點餐頁入口。既有訪客固定菜單不會被自動歸戶；持有原完整管理 Token 的登入者可從店家管理頁安全認領。
 - 此修正使用 SQLite／PostgreSQL 可重複執行的 additive migration，不改既有菜單、訂單或 Excel 資料；帳號隔離、舊 Token 相容、固定菜單更新及完整 134 項 Python 測試通過，相關前端 JavaScript 語法檢查亦通過。尚未 commit、push 或部署。
+- Todo 第 61 項已完成：「我的訂單」現在分成「我的店家固定菜單」與「我送出的訂單」。本人店家可直接調整固定菜單、查看店家收到的訂單或開啟顧客點餐頁；個人送單仍依登入帳號保存，不依取餐姓名判斷。
+- 新建立且已登入的店家會自動出現在「我的訂單」店家區；舊店家需由登入者在同頁貼入含正確 management Token 的原完整管理連結安全認領一次。只向該店送出訂單不會取得店家管理權限。此調整重用既有 `/api/me/menus` 與 Claim API，未修改資料庫、歷史訂單、Excel 或 QR Code。
+- Todo 第 62 項已完成：「我的菜單」也提供舊店家固定菜單的安全找回入口。登入者貼入含正確 management Token 的原完整管理連結後，固定菜單會立即以「店家固定菜單」標示出現在清單，並提供調整固定菜單、查看店家訂單與公開點餐頁入口；錯誤或他人 Token 仍由既有後端權限檢查拒絕。前端語法、8 項帳號頁針對性測試與完整 134 項自動測試均通過。
+- Todo 第 63 項已完成：固定菜單建立完成頁、店家訂單後台與「我的菜單」原有的調整連結共用 `/stores/{slug}/menu-update`。更新頁會先讀取並顯示目前固定菜單，可直接修改名稱與價格、增刪分類及品項，也可切換為上傳全新 JPG、PNG 或一頁式 PDF 重新辨識後取代。
+- 兩種固定菜單更新方式沿用既有 management Token／登入擁有者權限及 `PUT /api/stores/{slug}/menu`，沒有新增資料表或改變公開網址；既有 QR Code、歷史訂單快照與 Excel 邏輯不受影響。前端 JavaScript 語法、完整 135 項 Python 自動測試及 `git diff --check` 全部通過；尚未 commit、push 或部署。
 
 `doc/todo.md` 是任務狀態的正式清單；每次只能更新本次通過驗收的對應項目。
 

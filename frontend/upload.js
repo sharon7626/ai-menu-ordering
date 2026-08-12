@@ -30,6 +30,8 @@ const resetCropButton = document.querySelector("#reset-crop");
 const uploadButton = document.querySelector("#upload-button");
 const uploadStatus = document.querySelector("#upload-status");
 const recognitionResult = document.querySelector("#recognition-result");
+const recognitionTitle = document.querySelector("#recognition-title");
+const recognitionIntro = document.querySelector(".recognition-intro");
 const recognitionContent = document.querySelector("#recognition-content");
 const recognitionWarnings = document.querySelector("#recognition-warnings");
 const reviewForm = document.querySelector("#review-form");
@@ -49,6 +51,10 @@ const storePublicLink = document.querySelector("#store-public-link");
 const storeManagementLink = document.querySelector("#store-management-link");
 const storeUpdateLink = document.querySelector("#store-update-link");
 const scopeDescription = document.querySelector("#scope-description");
+const storeUpdateOptions = document.querySelector("#store-update-options");
+const editCurrentMenuButton = document.querySelector("#edit-current-menu");
+const uploadNewMenuButton = document.querySelector("#upload-new-menu");
+const currentMenuStatus = document.querySelector("#current-menu-status");
 const requestedMode = new URLSearchParams(window.location.search).get("mode");
 const uploadHeroArt = document.querySelector("[data-upload-ambient]");
 const uploadVisualMode = document.querySelector("#upload-visual-mode");
@@ -70,6 +76,8 @@ let cropStart = null;
 let croppedUploadFile = null;
 let appliedCrop = null;
 let isSelectingCrop = false;
+let recognitionSource = "upload";
+let currentStoreRecognition = null;
 
 function setUploadVisual({ mode, title, word, steps, note }) {
   uploadVisualMode.textContent = mode;
@@ -95,9 +103,13 @@ const storeUpdateContext = getStoreUpdateContext();
 if (storeUpdateContext) {
   document.querySelector(".eyebrow").textContent = "店家管理";
   document.querySelector("h1").textContent = "更新固定菜單";
+  document.querySelector(".panel-heading p").textContent = "固定菜單更新";
+  document.querySelector("#upload-title").textContent = "調整目前菜單或重新上傳";
   confirmButton.hidden = true;
   storeButton.textContent = "確認並更新固定菜單";
-  scopeDescription.textContent = "重新上傳並確認後，只會更新這家店目前的固定菜單；固定網址與既有訂單內容不會改變。";
+  scopeDescription.textContent = "可直接修改目前固定菜單，或上傳全新菜單重新辨識；固定網址與 QR Code 不變，既有訂單內容也不會改變。";
+  storeUpdateOptions.hidden = false;
+  uploadForm.hidden = true;
   setUploadVisual({
     mode: "SHOP MENU UPDATE",
     title: "更新固定菜單",
@@ -133,6 +145,70 @@ if (storeUpdateContext) {
       steps: ["上傳並確認菜單", "取得固定網址與 QR Code", "顧客掃碼點餐", "店家查看訂單彙整"],
       note: "SCAN · ORDER · SUMMARY",
     });
+  }
+}
+
+function cloneRecognition(recognition) {
+  return JSON.parse(JSON.stringify(recognition));
+}
+
+function publicMenuToRecognition(store) {
+  return {
+    restaurant_name: store.menu?.restaurant?.name ?? "",
+    categories: (store.menu?.categories ?? []).map((category) => ({
+      name: category.name,
+      items: (category.items ?? []).map((item) => ({
+        name: item.name,
+        description: item.description ?? "",
+        price: item.price,
+      })),
+    })),
+    warnings: [],
+  };
+}
+
+function setStoreUpdateChoice(choice) {
+  const isCurrent = choice === "current";
+  editCurrentMenuButton.setAttribute("aria-pressed", String(isCurrent));
+  uploadNewMenuButton.setAttribute("aria-pressed", String(!isCurrent));
+  uploadForm.hidden = isCurrent;
+}
+
+function showCurrentStoreMenu() {
+  setStoreUpdateChoice("current");
+  if (currentStoreRecognition) {
+    renderRecognition(cloneRecognition(currentStoreRecognition), "current");
+  }
+}
+
+function showNewStoreMenuUpload() {
+  if (recognitionSource === "current" && latestRecognition) {
+    syncStoreReviewToRecognition();
+    currentStoreRecognition = cloneRecognition(latestRecognition);
+  }
+  setStoreUpdateChoice("upload");
+  recognitionResult.hidden = true;
+  currentMenuStatus.textContent = "請在下方選擇全新的 JPG、PNG 或一頁式 PDF 菜單。";
+  currentMenuStatus.dataset.state = "ready";
+  fileDropZone.focus();
+}
+
+async function loadCurrentStoreMenu() {
+  currentMenuStatus.textContent = "正在載入目前固定菜單…";
+  currentMenuStatus.dataset.state = "loading";
+  try {
+    const response = await fetch(`/api/stores/${encodeURIComponent(storeUpdateContext.publicSlug)}`);
+    const store = await response.json();
+    if (!response.ok) {
+      throw new Error(typeof store.detail === "string" ? store.detail : "目前菜單載入失敗。");
+    }
+    currentStoreRecognition = publicMenuToRecognition(store);
+    currentMenuStatus.textContent = `已載入第 ${store.version} 版固定菜單，可直接在下方修改。`;
+    currentMenuStatus.dataset.state = "success";
+    showCurrentStoreMenu();
+  } catch (error) {
+    currentMenuStatus.textContent = `${error.message || "目前菜單載入失敗。"}仍可改用上傳全新菜單。`;
+    currentMenuStatus.dataset.state = "error";
   }
 }
 
@@ -635,7 +711,8 @@ function syncStoreReviewToRecognition() {
   };
 }
 
-function renderRecognition(result) {
+function renderRecognition(result, source = recognitionSource) {
+  recognitionSource = source;
   latestRecognition = result;
   confirmedRecognition = null;
   recognitionContent.replaceChildren();
@@ -643,6 +720,15 @@ function renderRecognition(result) {
   reviewStatus.hidden = true;
   groupCreated.hidden = true;
   storeCreated.hidden = true;
+
+  if (storeUpdateContext) {
+    recognitionTitle.textContent = source === "current"
+      ? "目前固定菜單"
+      : "全新菜單辨識結果";
+    recognitionIntro.textContent = source === "current"
+      ? "以下是目前提供給顧客的菜單。可直接修改名稱與價格，並新增或刪除分類及品項；確認後才會更新公開菜單。"
+      : "請確認全新菜單的辨識結果。可修改名稱與價格，並新增或刪除分類及品項；確認後會取代目前公開菜單。";
+  }
 
   const filterPanel = requestedMode === "group" ? createGroupFilters(result) : null;
   if (filterPanel) {
@@ -877,10 +963,11 @@ function renderRecognition(result) {
     setupGroupFilters(filterPanel);
   }
 
-  if (result.warnings.length > 0) {
+  const warningsList = Array.isArray(result.warnings) ? result.warnings : [];
+  if (warningsList.length > 0) {
     const warnings = document.createElement("ul");
     warnings.className = "recognition-warnings";
-    result.warnings.forEach((warning) => {
+    warningsList.forEach((warning) => {
       const warningItem = document.createElement("li");
       warningItem.textContent = warning;
       warnings.append(warningItem);
@@ -1074,6 +1161,12 @@ reviewForm.addEventListener("submit", async (event) => {
     } else {
       const publicUrl = new URL(result.public_url, window.location.origin);
       const publicSlug = result.public_slug;
+      if (isStoreUpdate) {
+        currentStoreRecognition = {
+          ...cloneRecognition(confirmedRecognition),
+          warnings: [],
+        };
+      }
       const token = isStoreUpdate
         ? storeUpdateContext.token
         : new URL(result.management_url, window.location.origin).hash.slice("#token=".length);
@@ -1113,6 +1206,17 @@ reviewForm.addEventListener("submit", async (event) => {
 });
 
 fileInput.addEventListener("change", updateSelection);
+
+if (storeUpdateContext) {
+  editCurrentMenuButton.addEventListener("click", () => {
+    if (currentStoreRecognition) {
+      showCurrentStoreMenu();
+    } else {
+      loadCurrentStoreMenu();
+    }
+  });
+  uploadNewMenuButton.addEventListener("click", showNewStoreMenuUpload);
+}
 
 for (const eventName of ["dragenter", "dragover"]) {
   fileDropZone.addEventListener(eventName, (event) => {
@@ -1199,7 +1303,7 @@ uploadForm.addEventListener("submit", async (event) => {
       throw new Error(message);
     }
 
-    renderRecognition(result.recognition);
+    renderRecognition(result.recognition, "upload");
     showProcessingStep("done");
     showStatus(
       croppedUploadFile
@@ -1217,4 +1321,7 @@ uploadForm.addEventListener("submit", async (event) => {
   }
 });
 
+if (storeUpdateContext) {
+  loadCurrentStoreMenu();
+}
 updateSelection();

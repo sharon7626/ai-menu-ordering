@@ -44,6 +44,28 @@ UPDATED_MENU = {
 
 
 class StoreMenuTests(unittest.TestCase):
+    def test_store_update_page_supports_current_menu_and_new_upload(self) -> None:
+        project_root = Path(__file__).resolve().parent.parent
+        upload_html = (project_root / "frontend" / "upload.html").read_text(
+            encoding="utf-8"
+        )
+        upload_js = (project_root / "frontend" / "upload.js").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn('id="edit-current-menu"', upload_html)
+        self.assertIn('id="upload-new-menu"', upload_html)
+        self.assertIn("直接修改目前菜單", upload_html)
+        self.assertIn("上傳全新菜單", upload_html)
+        self.assertIn("function publicMenuToRecognition", upload_js)
+        self.assertIn("function loadCurrentStoreMenu", upload_js)
+        self.assertIn(
+            "fetch(`/api/stores/${encodeURIComponent(storeUpdateContext.publicSlug)}`)",
+            upload_js,
+        )
+        self.assertIn('renderRecognition(cloneRecognition(currentStoreRecognition), "current")', upload_js)
+        self.assertIn('renderRecognition(result.recognition, "upload")', upload_js)
+
     def test_create_update_public_menu_and_preserve_old_order_snapshot(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
             database_path = Path(temporary_directory) / "store-menu.db"

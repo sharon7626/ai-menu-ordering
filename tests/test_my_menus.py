@@ -145,8 +145,10 @@ class MyMenusTests(unittest.TestCase):
         self.assertEqual(page.status_code, 200)
         self.assertIn("我的菜單", page.text)
         self.assertIn("店家固定菜單", page.text)
+        self.assertIn("找回以前建立的店家固定菜單", page.text)
+        self.assertIn('id="menu-store-management-url" type="password"', page.text)
         self.assertIn(
-            '<script src="/frontend/my-menus.js?v=20260812-1" type="module"></script>',
+            '<script src="/frontend/my-menus.js?v=20260812-2" type="module"></script>',
             page.text,
         )
 
