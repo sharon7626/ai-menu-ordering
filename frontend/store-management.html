@@ -9,7 +9,8 @@
     <link rel="stylesheet" href="/frontend/navigation.css?v=20260811-3">
     <link rel="stylesheet" href="/frontend/store-management.css?v=20260808-1">
     <link rel="stylesheet" href="/frontend/brand-pages.css?v=20260811-1">
-    <script src="/frontend/store-management.js?v=20260808-1" defer></script>
+    <script src="/frontend/auth.js?v=20260811-1" type="module"></script>
+    <script src="/frontend/store-management.js?v=20260812-1" type="module"></script>
   </head>
   <body>
     <nav class="top-home-nav" aria-label="主要導覽"><a class="top-home-brand" href="/" aria-label="席間首頁"><span class="top-home-brand-mark" aria-hidden="true">席</span><span class="top-home-brand-name">席間<small>MENU · ORDER · TOGETHER</small></span></a></nav>
@@ -31,6 +32,7 @@
             <p id="service-state"></p>
           </div>
           <nav aria-label="店家功能">
+            <button id="claim-store" type="button" hidden>儲存到我的帳號</button>
             <a id="public-menu-link">查看公開菜單</a>
             <a id="update-menu-link">更新菜單</a>
           </nav>

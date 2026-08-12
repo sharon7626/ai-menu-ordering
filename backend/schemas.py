@@ -371,11 +371,15 @@ class MyOrdersResponse(BaseModel):
 
 class SavedMenuSummary(BaseModel):
     id: int = Field(gt=0)
+    menu_type: Literal["group_template", "store_fixed"] = "group_template"
     restaurant_name: str
     category_count: int = Field(ge=0)
     item_count: int = Field(ge=0)
     created_at: datetime
     updated_at: datetime
+    public_slug: str | None = None
+    version: int | None = Field(default=None, gt=0)
+    active: bool | None = None
 
 
 class SavedMenusResponse(BaseModel):

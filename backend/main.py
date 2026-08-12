@@ -24,6 +24,7 @@ from backend.database import (
     get_orders_with_items,
     get_public_group_menu,
     initialize_database,
+    list_store_menus_for_owner,
     save_order,
     upsert_app_user,
 )
@@ -96,6 +97,7 @@ from backend.schemas import (
     StoreOrderCreateResponse,
 )
 from backend.stores import (
+    claim_store,
     create_store_from_confirmation,
     get_public_store_menu,
     get_store_management_data,
@@ -176,6 +178,28 @@ def _resolve_optional_app_user_id(authorization: str | None) -> int | None:
 def _resolve_required_app_user_id(authorization: str | None) -> int:
     user = _verify_firebase_authorization(authorization, required=True)
     return _save_verified_user(user)
+
+
+def _resolve_store_access(
+    authorization: str | None,
+    management_token: str | None,
+) -> tuple[int | None, str]:
+    """Resolve account ownership while preserving legacy management links."""
+    if management_token:
+        try:
+            return _resolve_optional_app_user_id(authorization), management_token
+        except HTTPException as error:
+            if error.status_code != 401:
+                raise
+            return None, management_token
+    if not authorization:
+        return None, ""
+    try:
+        return _resolve_optional_app_user_id(authorization), ""
+    except HTTPException as error:
+        if error.status_code != 401 or not authorization.startswith("Bearer "):
+            raise
+        return None, authorization.removeprefix("Bearer ").strip()
 
 
 @app.get("/api/auth/config", response_model=FirebaseWebConfigResponse)
@@ -537,9 +561,34 @@ async def get_my_menus(
     authorization: Annotated[str | None, Header()] = None,
 ) -> SavedMenusResponse:
     user_id = _resolve_required_app_user_id(authorization)
-    return SavedMenusResponse(
-        menus=[SavedMenuSummary(**menu) for menu in get_saved_menus(owner_user_id=user_id)]
-    )
+    menus = get_saved_menus(owner_user_id=user_id)
+    menus.extend(list_store_menus_for_owner(owner_user_id=user_id))
+    menus.sort(key=lambda menu: (str(menu["updated_at"]), menu["id"]), reverse=True)
+    return SavedMenusResponse(menus=[SavedMenuSummary(**menu) for menu in menus])
+
+
+@app.post(
+    "/api/me/stores/{public_slug}/claim",
+    response_model=AccountClaimResponse,
+)
+async def claim_my_store(
+    public_slug: str,
+    authorization: Annotated[str | None, Header()] = None,
+    management_token: Annotated[str | None, Header(alias="X-Management-Token")] = None,
+) -> AccountClaimResponse:
+    user_id = _resolve_required_app_user_id(authorization)
+    try:
+        claim_store(
+            public_slug=public_slug.strip().lower(),
+            management_token=management_token or "",
+            owner_user_id=user_id,
+        )
+    except AccountClaimDeniedError as error:
+        raise HTTPException(
+            status_code=403,
+            detail="無法認領這份店家固定菜單，請使用原本的完整管理連結。",
+        ) from error
+    return AccountClaimResponse(message="店家固定菜單已儲存到我的菜單。")
 
 
 @app.post(
@@ -610,10 +659,17 @@ async def create_group(
 
 
 @app.post("/api/stores", response_model=StoreCreateResponse, status_code=201)
-async def create_store(confirmation: GroupCreateRequest) -> StoreCreateResponse:
+async def create_store(
+    confirmation: GroupCreateRequest,
+    authorization: Annotated[str | None, Header()] = None,
+) -> StoreCreateResponse:
     """將人工確認菜單保存為店家固定菜單，回傳一次性管理連結。"""
     try:
-        store = create_store_from_confirmation(confirmation)
+        owner_user_id = _resolve_optional_app_user_id(authorization)
+        store = create_store_from_confirmation(
+            confirmation,
+            owner_user_id=owner_user_id,
+        )
     except DATABASE_ERROR_TYPES as error:
         raise HTTPException(
             status_code=500,
@@ -743,15 +799,15 @@ async def get_personal_store_order_api(
 async def get_store_management_api(
     public_slug: str,
     authorization: Annotated[str | None, Header()] = None,
+    management_token: Annotated[str | None, Header(alias="X-Management-Token")] = None,
 ) -> StoreManagementResponse:
     """只有持有店家管理 Token 的人能取得該店全部顧客訂單。"""
-    token = ""
-    if authorization and authorization.startswith("Bearer "):
-        token = authorization.removeprefix("Bearer ").strip()
+    owner_user_id, token = _resolve_store_access(authorization, management_token)
     try:
         store = get_store_management_data(
             public_slug=public_slug.strip().lower(),
             management_token=token,
+            owner_user_id=owner_user_id,
         )
     except StoreManagementAccessDeniedError as error:
         raise HTTPException(
@@ -765,16 +821,16 @@ async def get_store_management_api(
 async def download_store_management_excel(
     public_slug: str,
     authorization: Annotated[str | None, Header()] = None,
+    management_token: Annotated[str | None, Header(alias="X-Management-Token")] = None,
 ) -> Response:
     """驗證店家管理 Token 後，下載不含私密 Token 的 Excel 訂單表。"""
-    token = ""
-    if authorization and authorization.startswith("Bearer "):
-        token = authorization.removeprefix("Bearer ").strip()
+    owner_user_id, token = _resolve_store_access(authorization, management_token)
     normalized_slug = public_slug.strip().lower()
     try:
         store = get_store_management_data(
             public_slug=normalized_slug,
             management_token=token,
+            owner_user_id=owner_user_id,
         )
     except StoreManagementAccessDeniedError as error:
         raise HTTPException(
@@ -804,16 +860,16 @@ async def update_store_menu(
     public_slug: str,
     confirmation: GroupCreateRequest,
     authorization: Annotated[str | None, Header()] = None,
+    management_token: Annotated[str | None, Header(alias="X-Management-Token")] = None,
 ) -> StoreMenuUpdateResponse:
     """驗證店家管理 Token 後更新目前固定菜單。"""
-    token = ""
-    if authorization and authorization.startswith("Bearer "):
-        token = authorization.removeprefix("Bearer ").strip()
+    owner_user_id, token = _resolve_store_access(authorization, management_token)
     slug = public_slug.strip().lower()
     try:
         store = update_store_from_confirmation(
             public_slug=slug,
             management_token=token,
+            owner_user_id=owner_user_id,
             confirmation=confirmation,
         )
     except StoreManagementAccessDeniedError as error:

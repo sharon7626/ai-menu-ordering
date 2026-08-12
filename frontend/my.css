@@ -18,6 +18,7 @@ body { margin: 0; min-height: 100vh; }
 .my-card { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 1rem; padding: 1.25rem; }
 .my-card h2, .my-card p { margin: 0; }
 .my-card h2 { margin-bottom: 0.25rem; }
+.my-card .my-menu-type { width: fit-content; margin-bottom: 0.55rem; border: 1px solid #a65a3a; border-radius: 999px; padding: 0.25rem 0.6rem; color: #8f442a; font-size: 0.78rem; font-weight: 800; letter-spacing: 0.08em; }
 .my-view-toggle { display: flex; gap: 0.5rem; margin-bottom: 1rem; }
 .my-view-toggle button { min-height: 2.75rem; border: 1px solid #315c4b; border-radius: 999px; padding: 0.6rem 1rem; color: #315c4b; background: transparent; font: inherit; font-weight: 800; cursor: pointer; }
 .my-view-toggle button[aria-pressed="true"] { color: #fff; background: #315c4b; }

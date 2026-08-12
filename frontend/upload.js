@@ -1034,10 +1034,12 @@ reviewForm.addEventListener("submit", async (event) => {
   } else if (isStoreUpdate) {
     requestUrl = `/api/stores/${storeUpdateContext.publicSlug}/menu`;
     requestMethod = "PUT";
-    headers.Authorization = `Bearer ${storeUpdateContext.token}`;
+    if (storeUpdateContext.token) {
+      headers["X-Management-Token"] = storeUpdateContext.token;
+    }
   }
 
-  if (isGroupAction && window.AppAuth?.getAuthorizationHeaders) {
+  if ((isGroupAction || action === "store" || isStoreUpdate) && window.AppAuth?.getAuthorizationHeaders) {
     Object.assign(headers, await window.AppAuth.getAuthorizationHeaders());
   }
 

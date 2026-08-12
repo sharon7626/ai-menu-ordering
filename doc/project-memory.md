@@ -318,6 +318,8 @@ Firebase Token 驗證 → 使用者資料與選填關聯 → 登入建立／送�
 - 2026-08-12 使用者已從 `ai-menu-ordering-db` 的 External Database URL 安全執行正式備份；ZIP 保存於 Repository 外，匯出 6 張資料表、26 筆資料列。工具完成時與後續獨立重讀 ZIP 均通過完整性與筆數驗證；正式版本當時為 `ba9d17e`，Render 資料庫狀態為 Available。
 - 正式 PostgreSQL Disk Usage 上限為 1 GB，2026-08-12 Metrics 曲線明顯低於 20%（約 5%）；容量足以進行本次 additive migration，資料庫將於 2026-09-09 到期仍是主要部署後續風險。
 - 2026-08-12 已在 Render 正式 Web Service 保留既有 `DATABASE_URL`／`GEMINI_API_KEY`，加入 `FIREBASE_PROJECT_ID`、`FIREBASE_WEB_API_KEY`、`FIREBASE_AUTH_DOMAIN`、`FIREBASE_APP_ID` 與 `FIREBASE_SERVICE_ACCOUNT_JSON`；所有值由使用者直接貼入 Render，未進入 Repository 或對話。設定儲存後舊版重新建置成功並恢復 Live，新版仍未 commit 或 push。
+- 「我的菜單」已補足店家固定菜單：登入建立時以可為空的 `store_profiles.owner_user_id` 安全綁定，卡片明確標示「店家固定菜單」，並提供調整固定菜單、店家訂單與公開點餐頁入口。既有訪客固定菜單不會被自動歸戶；持有原完整管理 Token 的登入者可從店家管理頁安全認領。
+- 此修正使用 SQLite／PostgreSQL 可重複執行的 additive migration，不改既有菜單、訂單或 Excel 資料；帳號隔離、舊 Token 相容、固定菜單更新及完整 134 項 Python 測試通過，相關前端 JavaScript 語法檢查亦通過。尚未 commit、push 或部署。
 
 `doc/todo.md` 是任務狀態的正式清單；每次只能更新本次通過驗收的對應項目。
 

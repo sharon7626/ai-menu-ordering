@@ -112,6 +112,17 @@ nav a {
   font-weight: 900;
 }
 
+#claim-store {
+  border: 1px solid #315c4b;
+  border-radius: 0.7rem;
+  padding: 0.65rem 0.9rem;
+  color: #315c4b;
+  background: transparent;
+  font: inherit;
+  font-weight: 900;
+  cursor: pointer;
+}
+
 .summary-bar {
   margin-bottom: 1.5rem;
   color: #8d3f2d;

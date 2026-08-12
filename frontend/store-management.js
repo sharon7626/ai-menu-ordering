@@ -13,6 +13,7 @@ const emptySummary = document.querySelector("#empty-summary");
 const summaryList = document.querySelector("#summary-list");
 const downloadExcelButton = document.querySelector("#download-excel");
 const downloadStatus = document.querySelector("#download-status");
+const claimStoreButton = document.querySelector("#claim-store");
 let currentStore = null;
 let managementToken = "";
 
@@ -36,6 +37,14 @@ function showError(message) {
   managementContent.hidden = true;
 }
 
+async function accessHeaders() {
+  const headers = window.AppAuth?.getAuthorizationHeaders
+    ? await window.AppAuth.getAuthorizationHeaders()
+    : {};
+  if (managementToken) headers["X-Management-Token"] = managementToken;
+  return headers;
+}
+
 function renderManagement(store, token) {
   currentStore = store;
   document.title = `${store.restaurant_name}｜店家訂單後台`;
@@ -46,7 +55,9 @@ function renderManagement(store, token) {
   orderCount.textContent = `${store.order_count} 張訂單`;
   grandTotal.textContent = `合計 ${formatPrice(store.grand_total)}`;
   publicMenuLink.href = `/stores/${store.public_slug}`;
-  updateMenuLink.href = `/stores/${store.public_slug}/menu-update#token=${encodeURIComponent(token)}`;
+  updateMenuLink.href = token
+    ? `/stores/${store.public_slug}/menu-update#token=${encodeURIComponent(token)}`
+    : `/stores/${store.public_slug}/menu-update`;
   downloadExcelButton.disabled = store.order_count === 0;
   downloadExcelButton.title = store.order_count === 0
     ? "目前沒有訂單可匯出"
@@ -127,14 +138,18 @@ function renderManagement(store, token) {
 async function loadManagement() {
   const slug = slugFromPath();
   const token = tokenFromFragment();
-  if (!slug || !token) {
-    showError("缺少店家管理資訊，請使用建立店家時取得的完整管理連結。");
+  if (!slug) {
+    showError("店家管理網址不正確。");
     return;
   }
   managementToken = token;
   try {
+    const headers = await accessHeaders();
+    if (!headers.Authorization && !managementToken) {
+      throw new Error("請先登入，或使用建立店家時取得的完整管理連結。");
+    }
     const response = await fetch(`/api/stores/${slug}/management`, {
-      headers: { Authorization: `Bearer ${token}` },
+      headers,
     });
     const result = await response.json();
     if (!response.ok) {
@@ -145,13 +160,14 @@ async function loadManagement() {
       );
     }
     renderManagement(result, token);
+    claimStoreButton.hidden = !managementToken || !headers.Authorization;
   } catch (error) {
     showError(error.message || "店家訂單暫時無法讀取，請稍後再試。");
   }
 }
 
 downloadExcelButton.addEventListener("click", async () => {
-  if (!currentStore || !managementToken || currentStore.order_count === 0) {
+  if (!currentStore || currentStore.order_count === 0) {
     return;
   }
   downloadExcelButton.disabled = true;
@@ -159,10 +175,11 @@ downloadExcelButton.addEventListener("click", async () => {
   downloadStatus.dataset.state = "loading";
   downloadStatus.hidden = false;
   try {
+    const headers = await accessHeaders();
     const latestResponse = await fetch(
       `/api/stores/${currentStore.public_slug}/management`,
       {
-        headers: { Authorization: `Bearer ${managementToken}` },
+        headers,
         cache: "no-store",
       },
     );
@@ -179,7 +196,7 @@ downloadExcelButton.addEventListener("click", async () => {
     const response = await fetch(
       `/api/stores/${latestStore.public_slug}/management.xlsx?download=${Date.now()}`,
       {
-        headers: { Authorization: `Bearer ${managementToken}` },
+        headers,
         cache: "no-store",
       },
     );
@@ -212,6 +229,33 @@ downloadExcelButton.addEventListener("click", async () => {
     downloadStatus.dataset.state = "error";
   } finally {
     downloadExcelButton.disabled = !currentStore || currentStore.order_count === 0;
+  }
+});
+
+claimStoreButton.addEventListener("click", async () => {
+  if (!currentStore || !managementToken) return;
+  claimStoreButton.disabled = true;
+  try {
+    const headers = await accessHeaders();
+    const response = await fetch(`/api/me/stores/${currentStore.public_slug}/claim`, {
+      method: "POST",
+      headers,
+    });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.detail || "無法儲存這份固定菜單。");
+    claimStoreButton.textContent = "已儲存到我的菜單";
+    claimStoreButton.hidden = false;
+    window.setTimeout(() => { claimStoreButton.hidden = true; }, 1800);
+  } catch (error) {
+    showError(error.message || "無法儲存這份固定菜單。");
+  } finally {
+    claimStoreButton.disabled = false;
+  }
+});
+
+window.AppAuth?.onChange?.((user) => {
+  if (managementToken && currentStore) {
+    claimStoreButton.hidden = !user;
   }
 });
 

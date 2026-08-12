@@ -74,6 +74,7 @@ POSTGRES_SCHEMA_STATEMENTS = (
     """
     CREATE TABLE IF NOT EXISTS store_profiles (
         id BIGSERIAL PRIMARY KEY,
+        owner_user_id BIGINT REFERENCES app_users(id),
         public_slug TEXT NOT NULL UNIQUE CHECK (
             char_length(public_slug) = 8
             AND public_slug ~ '^[a-z]{8}$'
@@ -126,6 +127,7 @@ POSTGRES_SCHEMA_STATEMENTS = (
     )
     """,
     "ALTER TABLE group_sessions ADD COLUMN IF NOT EXISTS owner_user_id BIGINT REFERENCES app_users(id)",
+    "ALTER TABLE store_profiles ADD COLUMN IF NOT EXISTS owner_user_id BIGINT REFERENCES app_users(id)",
     "ALTER TABLE group_sessions ADD COLUMN IF NOT EXISTS archived_at TEXT",
     "ALTER TABLE orders ADD COLUMN IF NOT EXISTS user_id BIGINT REFERENCES app_users(id)",
     "ALTER TABLE orders ADD COLUMN IF NOT EXISTS archived_at TEXT",
@@ -148,6 +150,7 @@ POSTGRES_SCHEMA_STATEMENTS = (
     "CREATE INDEX IF NOT EXISTS idx_group_sessions_owner_created_at ON group_sessions(owner_user_id, created_at)",
     "CREATE INDEX IF NOT EXISTS idx_orders_user_created_at ON orders(user_id, created_at)",
     "CREATE INDEX IF NOT EXISTS idx_saved_menus_owner_updated ON user_saved_menus(owner_user_id, updated_at)",
+    "CREATE INDEX IF NOT EXISTS idx_store_profiles_owner_updated ON store_profiles(owner_user_id, updated_at)",
     """
     CREATE UNIQUE INDEX IF NOT EXISTS idx_orders_public_order_number
     ON orders(public_order_number) WHERE public_order_number IS NOT NULL
@@ -220,6 +223,7 @@ CREATE TABLE IF NOT EXISTS group_menus (
 
 CREATE TABLE IF NOT EXISTS store_profiles (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
+    owner_user_id INTEGER,
     public_slug TEXT NOT NULL UNIQUE CHECK (
         length(public_slug) = 8
         AND public_slug NOT GLOB '*[^a-z]*'
@@ -231,7 +235,8 @@ CREATE TABLE IF NOT EXISTS store_profiles (
     active INTEGER NOT NULL DEFAULT 1 CHECK (active IN (0, 1)),
     next_order_sequence INTEGER NOT NULL DEFAULT 1 CHECK (next_order_sequence >= 1),
     created_at TEXT NOT NULL,
-    updated_at TEXT NOT NULL
+    updated_at TEXT NOT NULL,
+    FOREIGN KEY (owner_user_id) REFERENCES app_users(id)
 );
 
 CREATE TABLE IF NOT EXISTS store_menus (
@@ -334,6 +339,9 @@ ON orders(user_id, created_at);
 
 CREATE INDEX IF NOT EXISTS idx_saved_menus_owner_updated
 ON user_saved_menus(owner_user_id, updated_at);
+
+CREATE INDEX IF NOT EXISTS idx_store_profiles_owner_updated
+ON store_profiles(owner_user_id, updated_at);
 """
 
 
@@ -444,6 +452,7 @@ def initialize_database(database_path: Path | None = None) -> Path | str:
         _migrate_orders_for_store_support(connection)
         _add_missing_order_item_note_column(connection)
         _add_missing_account_columns(connection)
+        _add_missing_store_owner_column(connection)
         _add_missing_archive_columns(connection)
         connection.executescript(GROUP_INDEX_SQL)
         connection.commit()
@@ -499,6 +508,18 @@ def _add_missing_account_columns(connection: sqlite3.Connection) -> None:
     if "user_id" not in order_columns:
         connection.execute(
             "ALTER TABLE orders ADD COLUMN user_id INTEGER REFERENCES app_users(id)"
+        )
+
+
+def _add_missing_store_owner_column(connection: sqlite3.Connection) -> None:
+    """Add the optional account owner used by fixed store menus."""
+    store_columns = {
+        row["name"] for row in connection.execute("PRAGMA table_info(store_profiles)")
+    }
+    if "owner_user_id" not in store_columns:
+        connection.execute(
+            "ALTER TABLE store_profiles "
+            "ADD COLUMN owner_user_id INTEGER REFERENCES app_users(id)"
         )
 
 
@@ -851,6 +872,7 @@ def list_saved_menus_for_owner(
     return [
         {
             "id": row["id"],
+            "menu_type": "group_template",
             "restaurant_name": row["restaurant_name"],
             "category_count": len(json.loads(row["menu_json"])["categories"]),
             "item_count": sum(
@@ -1433,6 +1455,7 @@ def save_store_menu(
     management_token_hash: str,
     menu: dict,
     created_at: datetime,
+    owner_user_id: int | None = None,
     database_path: Path | None = None,
 ) -> int:
     """以單一交易建立店家資料與第一版固定菜單。"""
@@ -1441,6 +1464,7 @@ def save_store_menu(
         cursor = connection.execute(
             """
             INSERT INTO store_profiles (
+                owner_user_id,
                 public_slug,
                 management_token_hash,
                 active,
@@ -1448,9 +1472,10 @@ def save_store_menu(
                 created_at,
                 updated_at
             )
-            VALUES (?, ?, 1, 1, ?, ?)
+            VALUES (?, ?, ?, 1, 1, ?, ?)
             """,
             (
+                owner_user_id,
                 public_slug,
                 management_token_hash,
                 created_at.isoformat(),
@@ -1500,6 +1525,7 @@ def get_store_menu_for_access_check(
             """
             SELECT
                 store_profiles.id,
+                store_profiles.owner_user_id,
                 store_profiles.public_slug,
                 store_profiles.management_token_hash,
                 store_profiles.active,
@@ -1520,6 +1546,7 @@ def get_store_menu_for_access_check(
         return None
     return {
         "store_profile_id": row["id"],
+        "owner_user_id": row["owner_user_id"],
         "public_slug": row["public_slug"],
         "management_token_hash": row["management_token_hash"],
         "active": bool(row["active"]),
@@ -1569,6 +1596,89 @@ def replace_store_menu(
         ).fetchone()["version"]
         connection.commit()
         return version
+    except Exception:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
+
+
+def list_store_menus_for_owner(
+    *, owner_user_id: int, database_path: Path | None = None
+) -> list[dict]:
+    """List fixed store menus owned by one signed-in account."""
+    connection = connect_database(database_path)
+    try:
+        rows = connection.execute(
+            """
+            SELECT
+                store_profiles.id,
+                store_profiles.owner_user_id,
+                store_profiles.public_slug,
+                store_profiles.active,
+                store_profiles.created_at,
+                store_profiles.updated_at,
+                store_menus.menu_json,
+                store_menus.version
+            FROM store_profiles
+            JOIN store_menus ON store_menus.store_profile_id = store_profiles.id
+            WHERE store_profiles.owner_user_id = ?
+            ORDER BY store_profiles.updated_at DESC, store_profiles.id DESC
+            """,
+            (owner_user_id,),
+        ).fetchall()
+    finally:
+        connection.close()
+
+    menus = []
+    for row in rows:
+        menu = json.loads(row["menu_json"])
+        menus.append(
+            {
+                "id": row["id"],
+                "menu_type": "store_fixed",
+                "restaurant_name": menu["restaurant"]["name"],
+                "category_count": len(menu["categories"]),
+                "item_count": sum(len(category["items"]) for category in menu["categories"]),
+                "created_at": row["created_at"],
+                "updated_at": row["updated_at"],
+                "public_slug": row["public_slug"],
+                "version": row["version"],
+                "active": bool(row["active"]),
+            }
+        )
+    return menus
+
+
+def claim_store_for_owner(
+    *,
+    public_slug: str,
+    management_token_hash: str,
+    owner_user_id: int,
+    database_path: Path | None = None,
+) -> None:
+    """Bind a legacy fixed store menu to an account after token verification."""
+    connection = connect_database(database_path)
+    try:
+        cursor = connection.execute(
+            """
+            UPDATE store_profiles
+            SET owner_user_id = ?, updated_at = ?
+            WHERE public_slug = ?
+              AND management_token_hash = ?
+              AND (owner_user_id IS NULL OR owner_user_id = ?)
+            """,
+            (
+                owner_user_id,
+                datetime.now(timezone.utc).isoformat(),
+                public_slug,
+                management_token_hash,
+                owner_user_id,
+            ),
+        )
+        if cursor.rowcount != 1:
+            raise AccountClaimDeniedError
+        connection.commit()
     except Exception:
         connection.rollback()
         raise
@@ -1785,6 +1895,7 @@ def get_store_management_data_for_access_check(
             """
             SELECT
                 store_profiles.id,
+                store_profiles.owner_user_id,
                 store_profiles.public_slug,
                 store_profiles.management_token_hash,
                 store_profiles.active,
@@ -1849,6 +1960,7 @@ def get_store_management_data_for_access_check(
 
     menu = json.loads(store_row["menu_json"])
     return {
+        "owner_user_id": store_row["owner_user_id"],
         "public_slug": store_row["public_slug"],
         "management_token_hash": store_row["management_token_hash"],
         "restaurant_name": menu["restaurant"]["name"],

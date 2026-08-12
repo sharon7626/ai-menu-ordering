@@ -166,7 +166,7 @@ class StoreManagementTests(unittest.TestCase):
         self.assertIn("management.xlsx", script)
         self.assertIn("餐點彙整", page)
         self.assertIn("下載 Excel 表格", page)
-        self.assertIn("store-management.js?v=20260808-1", page)
+        self.assertIn("store-management.js?v=20260812-1", page)
 
     def test_store_can_download_excel_with_summary_and_customer_details(self) -> None:
         with patch.dict(os.environ, {"DATABASE_URL": self.database_url}):

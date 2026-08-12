@@ -7,8 +7,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from backend.database import (
+    AccountClaimDeniedError,
     StoreManagementAccessDeniedError,
     StoreNotFoundError,
+    claim_store_for_owner,
     get_store_management_data_for_access_check,
     get_store_menu_for_access_check,
     replace_store_menu,
@@ -33,6 +35,7 @@ class CreatedStore:
 def create_store_from_confirmation(
     confirmation: GroupCreateRequest,
     database_path: Path | None = None,
+    owner_user_id: int | None = None,
 ) -> CreatedStore:
     """建立店家固定菜單，原始管理 Token 只回傳一次。"""
     menu = confirmed_menu_to_snapshot(confirmation)
@@ -45,6 +48,7 @@ def create_store_from_confirmation(
                 management_token_hash=hash_secret_token(management_token),
                 menu=menu,
                 created_at=datetime.now(timezone.utc),
+                owner_user_id=owner_user_id,
                 database_path=database_path,
             )
         except INTEGRITY_ERROR_TYPES:
@@ -80,7 +84,8 @@ def get_public_store_menu(
 def update_store_from_confirmation(
     *,
     public_slug: str,
-    management_token: str,
+    management_token: str = "",
+    owner_user_id: int | None = None,
     confirmation: GroupCreateRequest,
     database_path: Path | None = None,
 ) -> dict:
@@ -89,10 +94,13 @@ def update_store_from_confirmation(
         public_slug=public_slug,
         database_path=database_path,
     )
-    if store is None or not management_token:
+    if store is None:
         raise StoreManagementAccessDeniedError
-    received_hash = hash_secret_token(management_token)
-    if not hmac.compare_digest(store["management_token_hash"], received_hash):
+    owner_has_access = owner_user_id is not None and store["owner_user_id"] == owner_user_id
+    token_has_access = bool(management_token) and hmac.compare_digest(
+        store["management_token_hash"], hash_secret_token(management_token)
+    )
+    if not owner_has_access and not token_has_access:
         raise StoreManagementAccessDeniedError
 
     menu = confirmed_menu_to_snapshot(confirmation)
@@ -113,7 +121,8 @@ def update_store_from_confirmation(
 def get_store_management_data(
     *,
     public_slug: str,
-    management_token: str,
+    management_token: str = "",
+    owner_user_id: int | None = None,
     database_path: Path | None = None,
 ) -> dict:
     """驗證店家管理 Token 後，回傳該店家的訂單明細與餐點彙整。"""
@@ -121,13 +130,17 @@ def get_store_management_data(
         public_slug=public_slug,
         database_path=database_path,
     )
-    if store is None or not management_token:
+    if store is None:
         raise StoreManagementAccessDeniedError
-    received_hash = hash_secret_token(management_token)
-    if not hmac.compare_digest(store["management_token_hash"], received_hash):
+    owner_has_access = owner_user_id is not None and store["owner_user_id"] == owner_user_id
+    token_has_access = bool(management_token) and hmac.compare_digest(
+        store["management_token_hash"], hash_secret_token(management_token)
+    )
+    if not owner_has_access and not token_has_access:
         raise StoreManagementAccessDeniedError
 
     del store["management_token_hash"]
+    store.pop("owner_user_id", None)
     store["order_count"] = len(store["orders"])
     store["grand_total"] = sum(
         order["total_amount"] for order in store["orders"]
@@ -156,3 +169,28 @@ def get_store_management_data(
         for summary in item_summaries.values()
     ]
     return store
+
+
+def claim_store(
+    *,
+    public_slug: str,
+    management_token: str,
+    owner_user_id: int,
+    database_path: Path | None = None,
+) -> None:
+    """Safely attach an existing fixed store menu to a signed-in account."""
+    store = get_store_menu_for_access_check(
+        public_slug=public_slug,
+        database_path=database_path,
+    )
+    if store is None or not management_token:
+        raise AccountClaimDeniedError
+    received_hash = hash_secret_token(management_token)
+    if not hmac.compare_digest(store["management_token_hash"], received_hash):
+        raise AccountClaimDeniedError
+    claim_store_for_owner(
+        public_slug=public_slug,
+        management_token_hash=received_hash,
+        owner_user_id=owner_user_id,
+        database_path=database_path,
+    )

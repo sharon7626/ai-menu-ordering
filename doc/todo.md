@@ -341,3 +341,9 @@
   - 說明 Firebase Console、Render Environment Variables、PostgreSQL migration、GitHub push 後行為與正式驗收順序。
   - 驗收：程式、migration 與測試均完成；使用者可依一次一步的指示設定，但尚未 commit、push 或部署新版 Production。
   - 對應：正式部署限制與安全規範。
+
+- [x] **60. 將店家固定菜單納入「我的菜單」並提供安全管理入口**（Done）
+  - 登入建立店家固定菜單時記錄帳號擁有者，在「我的菜單」以「店家固定菜單」標示，並提供調整菜單、店家訂單與公開點餐頁入口。
+  - 舊固定菜單不依店名或公開網址猜測擁有者；只有登入者持有原完整管理 Token 時才能安全認領。
+  - 驗收：帳號 A 可跨裝置列出及更新自己的固定菜單；帳號 B 無法查看或更新；舊 Token 管理連結、店家訂單、Excel、QR Code 與訪客流程維持可用。
+  - 對應：FR-22、FR-32、FR-34、FR-40。
