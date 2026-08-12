@@ -275,6 +275,69 @@
   - 本機維持 SQLite；`DATABASE_URL` 為 Render PostgreSQL 時使用 Psycopg、正式空庫建表與 PostgreSQL 交易鎖。
   - 驗收：SQLite 完整流程不變；PostgreSQL URL、參數轉換、主鍵回傳、建表及交易差異相容性測試通過。
 
-- [ ] **47. 建立 Private GitHub Repository 並完成 Render 真實部署驗收**
-  - 使用者批准後才執行第一次 commit、push；再建立 Render PostgreSQL 與 Web Service。
-  - 驗收：使用 Render 公開網址完成 Gemini、兩人團購、團購 Excel、店家固定菜單、QR Code、店家訂單與 Excel，並確認重啟後 PostgreSQL 資料仍存在。
+- [x] **47. 建立 Private GitHub Repository 並完成 Render 真實部署驗收**（Done）
+  - 已建立 Private GitHub Repository、Render PostgreSQL 與 Web Service，正式網址為 `https://ai-menu-ordering.onrender.com`。
+  - 驗收：使用者已在 Render 公開網址完成 Gemini、三人團購、團購 Excel、店家固定菜單、QR Code、兩筆店家訂單與店家 Excel；服務重啟後團購與菜單資料仍可讀取，手機公開店家頁修正後亦完成驗收。
+
+## 第七階段：選擇性登入與品牌體驗升級
+
+- [x] **48. 建立 Firebase Authentication 設定與後端 ID Token 驗證**（Done）
+  - 加入不含正式值的 Firebase 環境設定、前端 Google Sign-In 初始化，以及 FastAPI 的 Firebase ID Token 驗證層。
+  - 驗收：Google 登入、登出與狀態維持可用；後端只信任驗證後的 Firebase UID，缺少、偽造、過期或錯誤專案 Token 皆拒絕；未登入訪客功能不受影響。
+  - 對應：FR-32、FR-33、FR-41、AC-21、AC-22。
+
+- [x] **49. 建立使用者資料表與既有資料的選填關聯**（Done）
+  - 為 SQLite 與 PostgreSQL 新增 `app_users`，並為團購加入可為 `NULL` 的 `owner_user_id`、訂單加入可為 `NULL` 的 `user_id`。
+  - 驗收：新舊資料庫都可安全初始化；既有團購、訂單、Token、Excel 與訪客流程完全不變，沒有任何舊資料被自動指派給帳號。
+  - 對應：FR-34、FR-35、FR-36、AC-21。
+
+- [x] **50. 將登入狀態安全綁定至新團購與新訂單**（Done）
+  - 登入建立團購時綁定 owner；登入送出團購或店家訂單時綁定 user；訪客仍保存 `NULL`。
+  - 驗收：登入與訪客各完成一組建立及送單流程，後端只依驗證 UID 綁定，不接受前端自行指定使用者。
+  - 對應：FR-35、FR-36、AC-21、AC-23、AC-24。
+
+- [x] **51. 建立「我的團購」與帳號擁有者管理入口**（Done）
+  - 登入後列出本人建立或 Claim 的團購，並以登入身分安全取得管理資料；保留既有 management Token 管理入口。
+  - 驗收：同帳號跨瀏覽器登入可找到團購；帳號 A 無法查看或管理帳號 B 的團購，公開團購碼不具管理權限。
+  - 對應：FR-37、AC-23、AC-27。
+
+- [x] **52. 建立「我的訂單」與帳號擁有者查看入口**（Done）
+  - 登入後列出本人送出或 Claim 的團購／店家訂單，並以登入身分安全查看；保留既有 order view Token 入口。
+  - 驗收：同帳號跨瀏覽器登入可找到訂單；帳號 A 無法查看帳號 B 或訪客的私人訂單。
+  - 對應：FR-38、AC-24、AC-27。
+
+- [x] **53. 建立訪客團購與訂單的安全 Claim**（Done）
+  - 訪客登入後，只有持有有效 management Token 才能 Claim 團購，持有有效 order view Token 才能 Claim 訂單。
+  - 驗收：正確 Token 可綁定；錯誤 Token、只有團購碼、姓名或訂單編號、以及已屬於其他帳號時皆拒絕，不洩漏資料是否存在或擁有者資訊。
+  - 對應：FR-39、FR-40、AC-25、AC-26。
+
+- [x] **54. 評估並建立「我的菜單」最小可行版本**（Done）
+  - 先確認能否在不重構既有菜單快照與店家資料模型的前提下，保存常用已確認菜單並再次建立團購。
+  - 驗收：若可用小範圍修改完成，登入使用者可從本人菜單再次建立團購且不重新呼叫 Gemini；若需大幅重構，將評估結果與後續資料規格文件化並停止實作。
+  - 對應：使用者確認優先順序 1～4；不得延誤 FR-32 至 FR-40。
+
+- [x] **55. 建立全站共用 Design System**（Done）
+  - 建立共用 CSS Variables 與 button、input、select、surface、card、badge、nav、modal、toast、loading、empty state、focus 及 motion 元件。
+  - 驗收：主要頁面可引用同一套 token 與元件，不再各自複製核心色彩與互動；既有功能與頁面載入維持正常。
+  - 對應：FR-42、FR-45、FR-47、AC-28。
+
+- [x] **56. 重新設計首頁品牌構圖與輕量互動**（Done）
+  - 依確認資訊架構重整 Hero、四步驟、店家入口與登入價值區，使用原生 CSS／JavaScript 建立收斂的游標、漂浮與 reveal 效果。
+  - 驗收：主要 CTA 清楚；桌面有柔和互動，手機與 reduced-motion 自然降級，沒有 scroll hijacking、假 loading、遮擋或大型動畫套件。
+  - 對應：FR-43、FR-44、FR-45、FR-46、FR-47、AC-28、AC-29。
+
+- [x] **57. 套用品牌系統至上傳、點餐、訂單與管理頁**（Done）
+  - 依任務強度逐頁收斂互動，保留同品項 variants、購物車、Excel、QR Code、Token 權限及所有既有操作。
+  - 驗收：上傳、確認、團購／店家點餐、個人訂單、我的頁面與管理頁風格一致；長文字、多規格、loading、empty、error 在桌面與手機可用。
+  - 對應：FR-42、FR-44、FR-46、FR-48、AC-28、AC-29。
+
+- [x] **58. 執行帳號安全、完整回歸、UI、效能與無障礙驗收**（Done）
+  - 驗證訪客、登入、跨瀏覽器、帳號隔離與 Claim；重跑 Gemini、圖片／PDF、crop、團購、店家、Excel、QR Code、PostgreSQL 相容性與全部既有測試。
+  - [x] 我的團購與我的訂單已加入可恢復的封存清單；封存不刪除原始資料，且再次開團沿用「我的菜單」既有功能。
+  - 驗收：AC-21 至 AC-31 全部通過；375、390、430、768 與桌面無溢出，鍵盤、焦點、對比、ARIA、觸控與 reduced motion 通過，正式載入預算未明顯退步。
+  - 對應：AC-21 至 AC-30。
+
+- [x] **59. 整理 migration、Firebase、Render 與 Production 部署前清單**（Done）
+  - 說明 Firebase Console、Render Environment Variables、PostgreSQL migration、GitHub push 後行為與正式驗收順序。
+  - 驗收：程式、migration 與測試均完成；使用者可依一次一步的指示設定，但尚未 commit、push 或部署新版 Production。
+  - 對應：正式部署限制與安全規範。

@@ -103,6 +103,10 @@ class PersonalGroupOrderTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertIn("我的訂單", response.text)
+        self.assertIn(
+            '<script src="/frontend/personal-order.js?v=20260811-2" type="module"></script>',
+            response.text,
+        )
         self.assertNotIn("小美", response.text)
         self.assertNotIn(self.token, response.text)
 

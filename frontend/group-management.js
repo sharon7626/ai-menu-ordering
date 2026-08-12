@@ -10,12 +10,14 @@ const grandTotal = document.querySelector("#grand-total");
 const emptySummary = document.querySelector("#empty-summary");
 const summaryList = document.querySelector("#summary-list");
 const closeGroupButton = document.querySelector("#close-group");
+const claimGroupButton = document.querySelector("#claim-group");
 const actionStatus = document.querySelector("#action-status");
 const copySummaryButton = document.querySelector("#copy-summary");
 const downloadExcelButton = document.querySelector("#download-excel");
 const textSummary = document.querySelector("#text-summary");
 let currentGroup = null;
 let managementToken = "";
+let accountMode = false;
 
 function codeFromPath() {
   const match = window.location.pathname.match(/^\/groups\/([^/]+)\/manage$/);
@@ -24,6 +26,22 @@ function codeFromPath() {
 
 function tokenFromFragment() {
   return new URLSearchParams(window.location.hash.slice(1)).get("token") ?? "";
+}
+
+function managementApiPath(publicCode, suffix) {
+  const encodedCode = encodeURIComponent(publicCode);
+  return accountMode
+    ? `/api/me/groups/${encodedCode}/${suffix}`
+    : `/api/groups/${encodedCode}/${suffix}`;
+}
+
+async function managementHeaders() {
+  if (!accountMode) {
+    return { Authorization: `Bearer ${managementToken}` };
+  }
+  return window.AppAuth?.getAuthorizationHeaders
+    ? window.AppAuth.getAuthorizationHeaders()
+    : {};
 }
 
 function formatPrice(amount) {
@@ -129,15 +147,21 @@ function renderManagement(group) {
 async function loadManagement() {
   const publicCode = codeFromPath();
   const token = tokenFromFragment();
-  if (!publicCode || !token) {
-    showError("缺少統籌管理資訊，請使用建立團購時取得的完整管理連結。");
+  if (!publicCode) {
+    showError("缺少團購資訊，請從我的團購或完整管理連結重新進入。");
     return;
   }
   managementToken = token;
+  accountMode = !token;
+  claimGroupButton.hidden = accountMode;
 
   try {
-    const response = await fetch(`/api/groups/${encodeURIComponent(publicCode)}/management`, {
-      headers: { Authorization: `Bearer ${token}` },
+    const headers = await managementHeaders();
+    if (!headers.Authorization) {
+      throw new Error("請先在首頁使用 Google 登入，再開啟我的團購。");
+    }
+    const response = await fetch(managementApiPath(publicCode, "management"), {
+      headers,
     });
     const result = await response.json();
     if (!response.ok) {
@@ -153,6 +177,34 @@ async function loadManagement() {
   }
 }
 
+claimGroupButton.addEventListener("click", async () => {
+  if (!currentGroup || !managementToken) return;
+  claimGroupButton.disabled = true;
+  try {
+    const authHeaders = window.AppAuth?.getAuthorizationHeaders
+      ? await window.AppAuth.getAuthorizationHeaders()
+      : {};
+    if (!authHeaders.Authorization) {
+      throw new Error("請先在首頁使用 Google 登入，再保存這個團購。");
+    }
+    const response = await fetch(`/api/me/groups/${currentGroup.public_code}/claim`, {
+      method: "POST",
+      headers: { ...authHeaders, "X-Management-Token": managementToken },
+    });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.detail || "團購暫時無法保存。");
+    actionStatus.textContent = result.message;
+    actionStatus.dataset.state = "success";
+    actionStatus.hidden = false;
+    claimGroupButton.hidden = true;
+  } catch (error) {
+    actionStatus.textContent = error.message || "團購暫時無法保存。";
+    actionStatus.dataset.state = "error";
+    actionStatus.hidden = false;
+    claimGroupButton.disabled = false;
+  }
+});
+
 closeGroupButton.addEventListener("click", async () => {
   if (!currentGroup || currentGroup.status === "closed") {
     return;
@@ -166,9 +218,9 @@ closeGroupButton.addEventListener("click", async () => {
   actionStatus.dataset.state = "loading";
   actionStatus.hidden = false;
   try {
-    const response = await fetch(`/api/groups/${currentGroup.public_code}/close`, {
+    const response = await fetch(managementApiPath(currentGroup.public_code, "close"), {
       method: "POST",
-      headers: { Authorization: `Bearer ${managementToken}` },
+      headers: await managementHeaders(),
     });
     const result = await response.json();
     if (!response.ok) {
@@ -213,9 +265,9 @@ downloadExcelButton.addEventListener("click", async () => {
   actionStatus.hidden = false;
   try {
     const latestResponse = await fetch(
-      `/api/groups/${encodeURIComponent(currentGroup.public_code)}/management`,
+      managementApiPath(currentGroup.public_code, "management"),
       {
-        headers: { Authorization: `Bearer ${managementToken}` },
+        headers: await managementHeaders(),
         cache: "no-store",
       },
     );
@@ -229,8 +281,8 @@ downloadExcelButton.addEventListener("click", async () => {
       throw new Error("目前還沒有使用者訂單，請有人完成送單後再下載。");
     }
 
-    const response = await fetch(`/api/groups/${currentGroup.public_code}/management.xlsx?download=${Date.now()}`, {
-      headers: { Authorization: `Bearer ${managementToken}` },
+    const response = await fetch(`${managementApiPath(currentGroup.public_code, "management.xlsx")}?download=${Date.now()}`, {
+      headers: await managementHeaders(),
       cache: "no-store",
     });
     if (!response.ok) {

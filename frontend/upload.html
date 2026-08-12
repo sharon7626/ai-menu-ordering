@@ -4,19 +4,36 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="description" content="上傳菜單圖片或一頁式 PDF">
-    <title>上傳菜單｜AI 菜單點餐系統</title>
-    <link rel="stylesheet" href="/frontend/navigation.css">
+    <title>上傳菜單｜席間</title>
+    <link rel="stylesheet" href="/frontend/design-system.css?v=20260811-1">
+    <link rel="stylesheet" href="/frontend/navigation.css?v=20260811-3">
     <link rel="stylesheet" href="./upload.css?v=20260808-1">
+    <link rel="stylesheet" href="/frontend/brand-pages.css?v=20260811-2">
     <script src="./menu-variants.js?v=20260808-1" defer></script>
-    <script src="./upload.js?v=20260808-2" defer></script>
+    <script src="/frontend/auth.js?v=20260811-1" type="module"></script>
+    <script src="./upload.js?v=20260811-4" defer></script>
   </head>
   <body>
-    <nav class="top-home-nav" aria-label="主要導覽"><a href="/">首頁</a></nav>
-    <header class="site-header">
-      <div class="header-inner">
-        <p class="eyebrow">菜單工具</p>
-        <h1>上傳菜單</h1>
-        <p>選擇一張清楚的菜單圖片或一頁式 PDF。</p>
+    <nav class="top-home-nav" aria-label="主要導覽"><a class="top-home-brand" href="/" aria-label="席間首頁"><span class="top-home-brand-mark" aria-hidden="true">席</span><span class="top-home-brand-name">席間<small>MENU · ORDER · TOGETHER</small></span></a></nav>
+    <header class="site-header upload-hero">
+      <div class="upload-hero-inner">
+        <div class="header-inner">
+          <p class="eyebrow">菜單工具</p>
+          <h1>上傳菜單</h1>
+          <p>選擇一張清楚的菜單圖片或一頁式 PDF。</p>
+        </div>
+        <div class="upload-hero-art" data-upload-ambient aria-hidden="true">
+          <span id="upload-visual-word" class="upload-art-word">GROUP MENU</span>
+          <article class="upload-art-sheet">
+            <p id="upload-visual-mode">GROUP ORDER</p>
+            <h2 id="upload-visual-title">這次一起點</h2>
+            <div><span>01</span><strong id="upload-visual-step-1">上傳並確認菜單</strong><i>✓</i></div>
+            <div><span>02</span><strong id="upload-visual-step-2">分享團購代碼</strong><i>→</i></div>
+            <div><span>03</span><strong id="upload-visual-step-3">大家各自點餐</strong><i>○</i></div>
+            <div><span>04</span><strong id="upload-visual-step-4">主揪查看彙整</strong><i>□</i></div>
+          </article>
+          <span id="upload-visual-note" class="upload-art-note">SHARE · ORDER · SUMMARY</span>
+        </div>
       </div>
     </header>
 
@@ -28,8 +45,8 @@
         </div>
 
         <form id="upload-form" novalidate>
-          <label class="file-picker" for="menu-file">
-            <span class="file-picker-title">選擇檔案</span>
+          <label id="file-drop-zone" class="file-picker" for="menu-file">
+            <span class="file-picker-title">拖曳菜單至此，或選擇檔案</span>
             <span class="file-picker-note">JPG、PNG 或一頁式 PDF，檔案上限 10 MB</span>
           </label>
           <input
@@ -40,8 +57,8 @@
           >
 
           <div id="file-summary" class="file-summary" hidden>
-            <span id="file-name"></span>
-            <span id="file-size"></span>
+            <span class="file-summary-info"><strong id="file-name"></strong><span id="file-size"></span></span>
+            <span class="file-summary-actions"><button id="replace-file" type="button">更換檔案</button><button id="remove-file" type="button">移除</button></span>
           </div>
 
           <section id="menu-preview-panel" class="menu-preview-panel" aria-labelledby="menu-preview-title" hidden>
@@ -64,6 +81,7 @@
           </section>
 
           <button id="upload-button" type="submit" disabled>上傳並辨識</button>
+          <div id="processing-steps" class="processing-steps" aria-label="菜單處理進度" hidden><span>正在讀取菜單</span><span>整理品項與價格</span><span>完成</span></div>
           <p id="upload-status" class="upload-status" role="status" aria-live="polite" hidden></p>
         </form>
 

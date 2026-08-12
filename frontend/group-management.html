@@ -4,13 +4,16 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="description" content="統籌查看團購個人訂單">
-    <title>團購管理｜AI 菜單點餐系統</title>
-    <link rel="stylesheet" href="/frontend/navigation.css">
+    <title>團購管理｜席間</title>
+    <link rel="stylesheet" href="/frontend/design-system.css?v=20260811-1">
+    <link rel="stylesheet" href="/frontend/navigation.css?v=20260811-3">
     <link rel="stylesheet" href="/frontend/group-management.css">
-    <script src="/frontend/group-management.js" defer></script>
+    <link rel="stylesheet" href="/frontend/brand-pages.css?v=20260811-1">
+    <script src="/frontend/auth.js?v=20260811-1" type="module"></script>
+    <script src="/frontend/group-management.js?v=20260811-2" type="module"></script>
   </head>
   <body>
-    <nav class="top-home-nav" aria-label="主要導覽"><a href="/">首頁</a></nav>
+    <nav class="top-home-nav" aria-label="主要導覽"><a class="top-home-brand" href="/" aria-label="席間首頁"><span class="top-home-brand-mark" aria-hidden="true">席</span><span class="top-home-brand-name">席間<small>MENU · ORDER · TOGETHER</small></span></a></nav>
     <header class="site-header">
       <div class="header-inner">
         <p>統籌專用</p>
@@ -27,6 +30,7 @@
           <h2 id="restaurant-name"></h2>
           <p id="group-state"></p>
           <button id="close-group" type="button">關閉團購</button>
+          <button id="claim-group" type="button" hidden>保存到我的團購</button>
           <p id="action-status" class="action-status" role="status" aria-live="polite" hidden></p>
         </div>
 
@@ -56,7 +60,7 @@
               <button id="copy-summary" type="button">複製文字摘要</button>
             </div>
           </div>
-          <textarea id="text-summary" rows="12" readonly></textarea>
+          <textarea id="text-summary" rows="12" readonly aria-labelledby="text-summary-title"></textarea>
         </section>
       </section>
     </main>

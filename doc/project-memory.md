@@ -9,7 +9,7 @@
 - 不記錄猜測、未驗證成果、完整除錯過程或任何機密值。
 - 更新目前進度時，只加入已完成且已測試的事實，不得預先宣告後續任務完成。
 
-最後整理日期：2026-08-10。
+最後整理日期：2026-08-11。
 
 ## 2. 專案最終成果
 
@@ -20,6 +20,8 @@
 5. 團購模式完成後增加店家固定菜單模式：店家預先設定菜單，顧客透過固定網址或 QR Code 點餐。
 6. 統籌與店家從後台依姓名查看餐點，明確辨識每份餐點屬於誰；訂單編號仍由系統保存，但不放在個人明細標題。
 7. 兩種模式共用菜單、購物車、訂單與管理畫面核心，但菜單與訂單資料彼此正確歸屬，不使用全站唯一正式菜單。
+8. 訪客持續擁有完整主要功能；Google 登入是選擇性的保存與找回能力，提供我的團購、我的訂單與跨裝置使用，不形成強制會員制。
+9. 全站以共用 Design System 建立安靜、自然、具有 editorial 層次的品牌體驗；首頁互動較強，點餐與管理頁逐步收斂，手機與 reduced-motion 必須安全降級。
 
 ## 3. 已確認技術與安全決策
 
@@ -28,7 +30,7 @@
 - 本機資料庫使用 SQLite。
 - 使用 Git 與 GitHub 進行版本管理。
 - 最後部署至 Render。
-- 本機維持 SQLite；Render 正式環境已確認使用 PostgreSQL，透過 `DATABASE_URL` 連線並從空資料庫開始。
+- 本機維持 SQLite；Render 正式環境已確認使用 PostgreSQL，透過 `DATABASE_URL` 連線。第一次部署從空資料庫開始；後續版本必須沿用並先備份既有正式資料庫，不可誤連新空資料庫。
 - AI API 只能由後端呼叫；API Key 不得出現在 HTML、前端 JavaScript、瀏覽器畫面或前端打包檔案。
 - API Key、密碼、Token、Cookie、Session Secret 與正式資料庫連線字串不得寫入程式碼或提交至 Git，必須透過環境變數讀取。
 - Render 機密資料必須放在 Render Environment Variables，不得寫入 Repository。
@@ -39,6 +41,9 @@
 - JPG、JPEG、PNG 與一頁式 PDF 以原始 bytes 和正確 MIME type 傳給 Gemini，不使用永久檔案上傳。
 - AI 回應必須使用 JSON Schema 結構化輸出，契約位於 `doc/menu-recognition.schema.json`；看不清楚的名稱或價格使用 `null` 並交由店家修正，不得猜測。
 - Gemini 免費層提交的內容可能用於改善 Google 產品，因此現階段只處理公開且不含機密資訊的餐廳菜單。
+- 選擇性登入已確認使用 Firebase Authentication 的 Google Sign-In；前端取得 Firebase ID Token，FastAPI 必須在後端驗證後才可使用可信任 UID。
+- Google 登入不取代既有 management Token 與 order view Token。訪客資料的 Claim 必須同時驗證登入身分與原始私密 Token，只知道團購碼、姓名或訂單編號不得 Claim。
+- 使用者資料採最小原則，不保存 Google Access Token；`group_sessions.owner_user_id` 與 `orders.user_id` 必須允許 `NULL`，讓既有及未登入訪客資料持續有效。
 
 ## 4. 菜單資料決策
 
@@ -80,10 +85,14 @@
 
 測試 → GitHub → Render 與正式部署。
 
+### 第七階段：選擇性登入與品牌體驗升級
+
+Firebase Token 驗證 → 使用者資料與選填關聯 → 登入建立／送單綁定 → 我的團購 → 我的訂單 → 安全 Claim → 我的菜單可行性評估 → 共用 Design System → 首頁與內頁品牌改版 → 完整安全、功能、UI、效能與無障礙驗收 → 新版部署前清單。
+
 ## 6. 目前進度
 
 - 已建立 README、需求規格、開發待辦與菜單資料規格等專案文件。
-- 已初始化 Git Repository，尚未由開發代理執行 commit 或 push。
+- 已初始化 Git Repository，並依使用者批准完成 Private GitHub Repository 的 commit 與 push。
 - 已完成 `.gitignore`、`.env.example` 與 `AGENTS.md` 的機密資訊安全設定，且沒有建立真正的 `.env`。
 - 已建立並使用 Python 內建 `json` 模組驗證 `data/menu.json`。
 - 已建立 `doc/menu-data-spec.md`，說明統一菜單資料格式。
@@ -237,13 +246,86 @@
 - Todo 第 45 項已完成：Render 使用 Python 3.12、Build Command `pip install -r requirements.txt`，Start Command 從 `backend.main:app` 啟動並信任 Render proxy headers；FastAPI 直接提供前端與資料靜態資源，QR Code 依正式 HTTPS request origin 產生，Excel 全程在記憶體建立。
 - Todo 第 46 項已完成：新增小型 SQLite／PostgreSQL 相容層與 PostgreSQL 空庫初始化，不重寫既有產品資料函式；正式送單使用列鎖保護團購及店家流水號，SQLite 原有交易、舊資料升級及全部測試維持不變。
 - 已安裝並固定 `psycopg[binary]==3.3.4`；Python 91 項測試、10 個前端 JavaScript 語法、套件相依、Python 編譯及真實 Uvicorn HTTP 啟動檢查通過。沒有真正 `.env`、Git commit 或 remote，機密掃描只命中測試中的安全假值。
-- Todo 第 47 項仍未完成：必須由使用者先建立或批准 Private GitHub Repository，之後才能 commit、push、建立 Render PostgreSQL／Web Service，並以真正 PostgreSQL 與公開網址執行完整正式驗收。
+- Todo 第 47 項已完成：Private GitHub Repository、Render PostgreSQL 與 Web Service 均已建立，正式網址為 `https://ai-menu-ordering.onrender.com`。
+- 使用者已在正式 Render 網址完成 Gemini 菜單辨識、三人團購、團購關閉、三張工作表的團購 Excel、店家固定菜單、QR Code、兩筆店家訂單與三張工作表的店家 Excel；服務重啟後團購狀態與菜單仍可讀取。
+- 手機店家公開頁曾發生購物車遮住菜單的 responsive 問題；已修正並完成 commit、push、Render 自動部署與手機實測。
+- 2026-08-11 已完成第二版唯讀盤點，確認目前共有 9 個主要前端頁面、各頁 CSS 重複度高、只有導覽與菜單規格分組是少數共用前端層；資料庫目前沒有使用者資料表或帳號關聯。
+- 使用者已批准第二版方向：保留完整訪客流程，新增選擇性 Google 登入、我的團購、我的訂單、安全 Claim，並建立全站共用品牌 Design System；規格位於 `doc/account-auth-spec.md` 與 `doc/brand-experience-spec.md`。
+- Todo 第 48 項已完成：首頁加入選擇性的 Google 登入、登出與 Firebase 本機狀態維持；未設定 Firebase 時登入入口自動隱藏，原有訪客流程不受影響。
+- FastAPI 新增只回傳安全 Web 設定的 `/api/auth/config`，以及驗證 Firebase ID Token 的 `/api/auth/me`；後端只接受 Firebase Admin 驗證後且 provider 為 `google.com` 的 UID，缺少或無效 Token 回傳 401，後端尚未設定則回傳 503。
+- Firebase Admin 固定為 `7.5.0`，Firebase Web SDK 固定為 `12.16.0`；正式設定仍未填入、未部署，服務帳戶 JSON 只允許由環境變數提供且永不回傳前端。完整 Python 自動測試 101 項、相關 Python 編譯與 JavaScript 語法檢查通過。
+- Todo 第 49 項已完成：SQLite 與 PostgreSQL schema 新增 `app_users`，團購新增可為 `NULL` 的 `owner_user_id`，訂單新增可為 `NULL` 的 `user_id`，並建立使用者查詢索引。
+- 舊 SQLite migration 會先補可空欄位再建立索引；以既有訪客團購與訂單實測重複初始化後資料、Token 欄位與金額均保留，帳號關聯仍為 `NULL`。完整 Python 自動測試 103 項通過。
+- Todo 第 50 項已完成：登入建立新團購時綁定驗證後的 owner，登入送出團購或店家訂單時綁定驗證後的 user；`app_users` 只以後端驗證的 Firebase UID 建立或更新。
+- 上傳、團購點餐與店家點餐頁會在已登入時附上短效 Firebase ID Token；訪客請求不附登入 Header，owner／user 欄位保持 `NULL`。前端自行傳入 `owner_user_id` 或 `user_id` 會被 schema 拒絕。
+- 完整 Python 自動測試 106 項及 4 個相關 JavaScript 語法檢查通過；既有後端核價、management／order Token 與 Excel 未改動。
+- Todo 第 51 項已完成：新增「我的團購」頁與 `/api/me/groups`；只列出驗證帳號擁有的團購，不回傳 management Token，並提供跨裝置帳號管理入口。
+- 團購管理頁同時支援原 management Token 與登入 owner 授權；owner 可查看管理資料、關閉團購與下載 Excel，帳號 A 對帳號 B 的管理 API 回傳 403，原 Token 入口仍可使用。
+- 完整 Python 自動測試 109 項及相關 JavaScript 語法檢查通過。
+- Todo 第 52 項已完成：新增「我的訂單」頁與 `/api/me/orders`，只列出目前驗證帳號送出的團購／店家訂單，不回傳 order view Token。
+- 個人訂單頁同時支援原 order view Token 與登入 user 授權；帳號 A 無法列出或讀取帳號 B 及訪客訂單，原 Token 入口仍可使用。完整 Python 自動測試 112 項及相關 JavaScript 語法檢查通過。
+- Todo 第 53 項已完成：訪客團購只有持有原 management Token 才能 Claim，訪客團購／店家訂單只有持有原 order view Token 才能 Claim；Firebase Token 與既有私密 Token 使用分離 Header。
+- Claim 採原子化更新，可由同帳號安全重試；錯誤、缺少 Token 或已屬於其他帳號皆回傳一般化 403，不依姓名、email、團購碼或訂單編號猜測擁有者。管理與個人訂單頁提供「保存到我的帳號」操作。
+- 完整 Python 自動測試 114 項及相關 JavaScript 語法檢查通過。
+- Todo 第 54 項已完成：評估確認不需重構既有快照；新增獨立 `user_saved_menus`，登入者建立團購時同交易保存已確認標準菜單，內容相同時依指紋去重。
+- 「我的菜單」可從本人菜單直接建立新的團購代碼、管理 Token 與獨立快照，不重新呼叫 Gemini；其他帳號無法使用。評估與範圍記錄於 `doc/my-menu-mvp.md`。
+- 完整 Python 自動測試 117 項及相關 JavaScript 語法檢查通過。
+- Todo 第 55 項已完成：新增全站共用 `design-system.css`，集中暖米白／自然綠／陶土色、字級、間距、圓角、容器、motion、focus 與 button／field／surface／card／badge／modal／toast／loading／empty 元件；12 個 HTML 頁面全部先載入同一套 token。
+- Design System 支援 44px 級觸控尺寸、鍵盤 `focus-visible` 與 `prefers-reduced-motion`；完整 Python 自動測試 119 項通過。
+- Todo 第 56 項已完成：首頁工作品牌改為「席間／MENU · ORDER · TOGETHER」，「AI 菜單點餐系統」只保留為功能描述；Hero、section、card 與 small label 使用收斂的 responsive typography，不再使用孤立巨大數字或滿版帳號標語。
+- HOW IT FLOWS 使用共用 Preview Stage：桌面 hover／鍵盤 focus 與方向鍵、手機 tap 可在上傳檔案、AI 整理品項、分享代碼／QR 示意及訂單統計四種內容間切換；底層沒有假 loading 或大型動畫套件。
+- 首頁已加入 2～8px 級 ambient pointer、CTA 箭頭／微磁吸、導覽 underline、scroll reveal、店家菜單 mockup 與一致的 01～03 editorial section index；`prefers-reduced-motion` 會停用非必要動畫。
+- 實際瀏覽器驗證 375、390、430、768 與 1440px：沒有水平溢出，手機 tap 流程可用，桌面 hover 流程可用；Hero 桌面 64px、手機約 43～44px，Section 桌面 48px、手機約 34～36px。完整自動測試 121 項與 `home.js` 語法檢查通過。
+- Todo 第 57 項已完成第二輪 UI／UX：首頁移除無功能的數字與假分享控制，品牌主名稱統一為「席間」，Hero 提供訪客主入口與鄰近的選擇性 Google 登入；團購代碼改為按鈕開啟快速輸入對話框，不再重複大型輸入區。
+- HOW IT FLOWS 使用虛擬早餐菜單呈現拖放上傳、AI 擷取成結構化品項、分享代碼／連結／QR Code 與訂單統計；桌面 hover／focus、鍵盤與手機 tap 會切換預覽，並保留 reduced-motion 安全降級。
+- 固定菜單區已明確定位為 `FOR EVERYDAY SHOPS` 店家功能，文案只描述建立固定菜單、分享 QR Code 與自然彙整顧客訂單，不再混入團購主常用模板。
+- 新增共用 `brand-pages.css` 並套用至建立團購／上傳、菜單確認、團購與店家點餐、個人訂單、團購與店家管理、我的團購／訂單／菜單、管理與示範頁；共用安靜 Header、席間品牌、色彩、字體、按鈕、欄位、卡片、間距及 focus／hover／active 狀態。
+- 上傳頁新增原生 drag／drop 視覺回饋、檔案更換／移除及讀取／整理／完成狀態；沿用既有檔案輸入與 API，不改後端行為。
+- 全部前端 JavaScript 語法檢查通過，完整 Python 自動測試 126 項通過；實際瀏覽器以 390px 與 1440px 檢查主要內頁，皆載入共用品牌層且無水平溢出，console 無錯誤或警告。
+- 本輪沒有修改後端、資料庫、Firebase、Gemini、Excel 或 QR Code 邏輯，也沒有 commit、push 或部署；下一個未完成任務是 Todo 第 58 項完整帳號安全、回歸、UI、效能與無障礙驗收。
+- Todo 第 57 項的店家文案驗收修正：`FOR EVERYDAY SHOPS` 標題改為「店家的菜單，顧客掃碼就能點。」，不再使用容易被理解成團購主模板的「常用菜單，不必每次重來」。
+- Todo 第 58 項已完成可在本機進行的第一輪驗收：126 項完整自動測試、全部前端 JavaScript 語法、Python compileall 與應用程式機密值樣式掃描均通過；帳號隔離、Claim、訪客流程、Gemini 錯誤處理、圖片／PDF、crop、團購、店家、Excel、QR Code 與 PostgreSQL 相容性皆由既有測試覆蓋。
+- 實際瀏覽器驗證首頁 375／390／430／768／1440px，以及 10 個主要內頁的 390／1440px，均無水平溢出；修正首頁品牌連結為 44px 觸控高度、團購摘要欄位 ARIA 名稱，以及帳號說明文字在淡陶土背景上的對比。已載入兩組 reduced-motion 規則，首頁必要資源約 54.5 KB，未載入 React、Vue、GSAP 或 Three.js。
+- Todo 第 58 項的真實 Firebase 本機驗收已完成第一部分：使用者已建立 Web App、啟用 Google provider、設定 `localhost`／`127.0.0.1`／Render 授權網域，並以環境變數提供 Web 設定與 Service Account；`/api/auth/config` 為 enabled，真實 Google 登入後 `/api/auth/me` 與 `/api/me/groups` 均回覆 200。Todo 58 仍需完成登出、重新整理狀態、跨瀏覽器帳號隔離與其餘完整回歸後才可標記完成。
+- 首頁雙模式資訊架構已依使用者實際檢視修正：第一屏直接標示「團購點餐 · 店家掃碼點餐」，以兩個簡短情境說明區分主揪／參與者與店家／顧客，並同時提供「建立新團購」、「我有團購代碼」及「店家建立固定菜單」三個真實操作入口；下方店家區只作深入說明。
+- 雙模式 Hero 已以 375／390／430／768／1440px 實際驗證，店家入口均位於初始視窗內、觸控高度 52px，沒有水平溢出；首頁相關 14 項測試與 `home.js` 語法檢查通過。
+- Todo 第 58 項第二輪 UI 驗收修正：所有內頁頂端「首頁」連結改以可點擊的「席／席間／MENU · ORDER · TOGETHER」品牌標誌呈現，保留原網址與無障礙名稱，不新增重複導覽。
+- 建立新團購／建立店家固定菜單的上傳頁加入與首頁一致的雙欄第一屏；右側會依模式清楚呈現「上傳菜單 → 取得團購代碼 → 大家點餐」或「建立固定菜單 → 產生 QR Code → 顧客送單」，並使用原生 CSS／JavaScript 提供輕量指標視差與 reduced-motion 降級。
+- 首頁店家功能示意已由抽象英文菜單改為「店家建立菜單 → 顧客掃碼點餐 → 訂單自動彙整」三階段中文流程，QR、顧客／份數／金額與 Excel 結果皆有明確作用；互動只借鑑參考網站的空間層次、浮動物件與指標回應，不複製其素材或版面。
+- 首頁與主要內頁分類標題已縮小並統一較細緻的 serif 比例；實際瀏覽器以 390px 與 1440px 驗證建立團購頁及首頁店家流程均無水平溢出，完整自動測試 126 項通過。本輪未修改後端、資料庫、Firebase、Gemini、Excel 或 QR Code，也未部署、commit 或 push。
+- Todo 第 58 項第三輪 UI 驗收修正：11 個內頁不再以 CSS 偽元素改寫「首頁」，而是在 HTML 中使用與首頁相同的「席」圓章、「席間」及 `MENU · ORDER · TOGETHER` 品牌結構；共用樣式版本號已更新，避免瀏覽器沿用舊導覽快取。
+- 首頁主標「一張菜單，讓大家一起點。」已由桌面約 64px 收斂為 48px，390px 手機約 35px；實際比較首頁與內頁品牌圓章皆為 36px、品牌名稱皆約 18.4px，桌面與手機均無水平溢出。完整自動測試 126 項通過。
+- 店家固定菜單上傳頁右側流程已與一般團購完全分離，並更新前端資源版本避免沿用舊快取。店家模式顯示「上傳並確認菜單 → 取得固定網址與 QR Code → 顧客掃碼點餐 → 店家查看訂單彙整」；團購模式顯示「上傳並確認菜單 → 分享團購代碼 → 大家各自點餐 → 主揪查看彙整」。
+- 上述雙模式視覺已在 1440px 與 390px 實際驗證，店家／團購文字正確切換且沒有水平溢出；`upload.js` 語法與完整自動測試 126 項通過。本輪仍未部署、commit 或 push。
+- 真實 Firebase 登入首次驗證時，Anaconda Python 因未使用 Windows 系統憑證庫而發生 `CertificateFetchError`；後端現在只在 Windows 啟用既有 `truststore`，Linux／Render 維持原行為。安全診斷只記錄例外類型，不記錄 Token、帳號、金鑰或 SDK 詳細錯誤。修正後真實登入成功，完整自動測試 127 項通過。
+- 真實「我的團購」驗收發現管理頁曾沿用瀏覽器快取的舊 JavaScript，導致帳號擁有者入口誤要求 management Token；`group-management.js` 已加入版本化 URL 並改為 module，使用者強制重新整理後可用登入身分開啟團購管理。既有 Token 管理入口維持可用，完整 127 項測試與全部前端 JavaScript 語法檢查通過。
+- 為避免同一快取與 Firebase 初始化順序問題延伸到其他帳號入口，`我的團購`、`我的訂單`、`我的菜單` 與個人訂單明細腳本也統一使用版本化 module URL；四類帳號頁相關 12 項測試及 JavaScript 語法檢查通過，API 與資料模型未變更。
+- 上述帳號頁快取修正完成後再次執行完整回歸：127 項 Python 自動測試與 14 個前端 JavaScript 檔案語法檢查全部通過。Todo 第 58 項仍保留未完成，等待使用者以真實 Google 帳號驗證「我的訂單」與個人訂單明細後再繼續後續登出／跨裝置驗收。
+- 真實「我的訂單」驗收確認本機既有 35 張訂單（包含團購 `U3PTK3` 的 3 張）皆建立為訪客訂單，`user_id` 全部為空，因此不能依可自由輸入的取餐姓名自動歸戶。團購與店家點餐頁已更新帳號綁定腳本版本，避免瀏覽器沿用未附登入憑證的舊程式；新增快取與帳號綁定檢查後，完整自動測試 128 項通過。舊訂單維持原資料，只有持有個人訂單私密 Token 時才能安全 Claim。
+- 「我的團購」進行中卡片已補回可跨裝置找回的參與者公開網址、複製連結與 QR Code；QR 只包含 `/groups/{public_code}` 公開網址，不含 management Token 或帳號資料，已截止團購不顯示分享入口。相關測試與完整 128 項回歸通過，資料庫結構及既有團購／訂單未變更。
+- 「我的團購」與「我的訂單」已加入帳號專屬的封存、查看已封存與恢復功能。封存只寫入可為空的 `archived_at` 並從目前清單移開，不刪除團購、訂單、品項、管理頁、公開頁或 Excel 資料；其他帳號無權操作。既有 SQLite 會安全補欄位，PostgreSQL 使用可重複執行的 `ADD COLUMN IF NOT EXISTS`。
+- 「重新團購」不在「我的團購」複製第二套流程；「我的團購」提供前往「我的菜單」的快速入口，由既有「用這份菜單建立團購」建立新代碼與新快照，且不重新呼叫 Gemini。
+- 封存功能完成 Python／JavaScript 語法檢查、13 項針對性測試及完整 128 項自動測試，全部通過。
+- Todo 第 58 項已完成：整合使用者先前的真實 Google 登入、重新整理、我的團購、我的訂單、個人明細、QR Code、Excel 與手機版驗收，以及自動化帳號隔離、Claim、訪客流程與 Token 安全測試，確認帳號功能與既有訪客流程可並存。
+- 最終本機回歸再次通過 128 項 Python 測試、14 個前端 JavaScript 語法、Python 編譯、機密字串及大型框架掃描。首頁、團購／店家上傳、加入團購、我的團購、我的訂單與我的菜單實際瀏覽器檢查無水平溢出、無未命名按鈕、無 console 錯誤；先前 375／390／430／768／桌面與 reduced-motion 驗收結果持續有效。
+- Todo 第 58 項完成後，下一個未完成工作是 Todo 第 59 項「整理 migration、Firebase、Render 與 Production 部署前清單」；未經使用者批准仍不得 commit、push 或部署。
+- 真實畫面第一次驗收曾顯示 `/undefined` 與 QR 破圖，確認原因是本機 Uvicorn 仍執行修改前的後端版本，而非團購資料錯誤；重新以 `--reload` 啟動後，`/groups/ULC862` 公開頁與 `/api/groups/ULC862/qr.svg` 均實測回覆 HTTP 200，QR 為有效 SVG。
+- 重新啟動後曾發生 Google 登入 `CertificateFetchError`，實際原因是該次本機後端程序沒有外部網路權限，無法取得 Firebase 公開驗證憑證，並非帳號或 Firebase Console 設定失效；改以允許網路的 Uvicorn 程序啟動後，Google 公開憑證端點實測回覆 HTTP 200。安全 log 仍只記錄例外類型，不含 Token、Email 或金鑰。
+- Todo 第 59 項已完成：新增 `doc/production-deployment-checklist.md`，依序整理正式 PostgreSQL 備份與到期日、Firebase Console、Render Environment Variables、可重複執行 migration、GitHub push／Render Auto-Deploy 行為、正式回歸與失敗復原方式。
+- 新版發布的安全閘門已確立：先取得可復原的正式資料備份，再補齊 Render Firebase 設定，最後一次通過 Git／機密與完整測試後，仍須由使用者另外明確批准 commit 與 push。Todo 59 完成不代表新版已部署；目前 Production 維持舊版穩定狀態。
+- Render 正式 PostgreSQL 已確認為 Free 方案，內建 Point-in-Time Recovery 與 Export 均不可用，且畫面標示將於 2026-09-09 到期並刪除；使用者不需為本專案升級付費，但必須在到期前完成資料庫搬移。
+- 為本次發布前保全資料，新增 `scripts/backup_postgresql.py`：只從程序環境讀取 External Database URL，以唯讀 PostgreSQL 連線把全部 public 資料表匯出成 Repository 外的 CSV + manifest ZIP，再核對每張表資料筆數；工具不顯示或保存資料庫連線字串。
+- 2026-08-12 使用者已從 `ai-menu-ordering-db` 的 External Database URL 安全執行正式備份；ZIP 保存於 Repository 外，匯出 6 張資料表、26 筆資料列。工具完成時與後續獨立重讀 ZIP 均通過完整性與筆數驗證；正式版本當時為 `ba9d17e`，Render 資料庫狀態為 Available。
+- 正式 PostgreSQL Disk Usage 上限為 1 GB，2026-08-12 Metrics 曲線明顯低於 20%（約 5%）；容量足以進行本次 additive migration，資料庫將於 2026-09-09 到期仍是主要部署後續風險。
+- 2026-08-12 已在 Render 正式 Web Service 保留既有 `DATABASE_URL`／`GEMINI_API_KEY`，加入 `FIREBASE_PROJECT_ID`、`FIREBASE_WEB_API_KEY`、`FIREBASE_AUTH_DOMAIN`、`FIREBASE_APP_ID` 與 `FIREBASE_SERVICE_ACCOUNT_JSON`；所有值由使用者直接貼入 Render，未進入 Repository 或對話。設定儲存後舊版重新建置成功並恢復 Live，新版仍未 commit 或 push。
 
 `doc/todo.md` 是任務狀態的正式清單；每次只能更新本次通過驗收的對應項目。
 
 ## 7. 目前不做
 
-- 會員登入。
+- 強制登入；訪客仍保留完整主要功能。
+- Email＋密碼、忘記密碼、SMS、LINE、Facebook、Apple 等其他登入方式。
+- 會員等級、付費會員、完整會員中心或大頭照上傳。
 - 多店家帳戶與多分店管理平台；店家模式第一版只支援單一店家情境。
 - 外送與派單。
 - 線上付款。
@@ -276,5 +358,7 @@ C:\Users\sharo\anaconda3\python.exe
 
 ## 10. 待後續確認
 
-- 以代表性菜單量測 Gemini 辨識正確率與延遲，並在部署前重新確認免費層額度、資料使用條款及模型是否仍可用。
-- Render PostgreSQL 建立後，必須使用真正 Internal Database URL 完成空庫初始化、完整雙模式流程與重啟持久性驗收。
+- Firebase Console 的 Web App、Google provider 與本機／Render Authorized Domains 已完成，本機真實 Google 登入已通過；正式 Render Environment Variables 與 Production 驗收仍須等使用者批准部署後再設定。
+- Firebase Admin credential 與正式 Web App 設定不得提交至 Git；正式值只能放在 Render Environment Variables。
+- 「我的菜單」需在核心登入、我的團購與我的訂單完成後評估；若需要大幅重構菜單資料模型，本次不勉強實作。
+- 新版不得直接在 Production 測試；完成本機 migration 與全部驗收後，先說明 GitHub push、Render migration 與正式驗收流程，再等待使用者批准部署。

@@ -4,6 +4,30 @@ from typing import Literal, Self
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
+class FirebaseWebConfigResponse(BaseModel):
+    """提供前端初始化 Firebase Web SDK 的公開設定。"""
+
+    enabled: bool
+    api_key: str | None = None
+    auth_domain: str | None = None
+    project_id: str | None = None
+    app_id: str | None = None
+
+
+class FirebaseSessionResponse(BaseModel):
+    """Firebase ID Token 通過後端驗證後的登入身分。"""
+
+    authenticated: bool = True
+    uid: str
+    email: str | None = None
+    display_name: str | None = None
+
+
+class AccountClaimResponse(BaseModel):
+    success: bool = True
+    message: str
+
+
 class OrderItem(BaseModel):
     """一筆訂單中的單一餐點。"""
 
@@ -307,6 +331,55 @@ class GroupManagementResponse(BaseModel):
     order_count: int = Field(ge=0)
     grand_total: int = Field(ge=0)
     text_summary: str
+
+
+class MyGroupSummary(BaseModel):
+    """登入者的單筆團購摘要，不包含任何私密 Token。"""
+
+    public_code: str
+    restaurant_name: str
+    status: Literal["open", "closed"]
+    created_at: datetime
+    closed_at: datetime | None
+    order_count: int = Field(ge=0)
+    grand_total: int = Field(ge=0)
+    public_url: str
+    management_url: str
+    archive_api_url: str
+
+
+class MyGroupsResponse(BaseModel):
+    groups: list[MyGroupSummary]
+
+
+class MyOrderSummary(BaseModel):
+    """登入者的單筆訂單摘要，不包含任何查看 Token。"""
+
+    mode: Literal["group", "store"]
+    restaurant_name: str
+    public_order_number: str
+    customer_name: str
+    total_amount: int = Field(ge=0)
+    created_at: datetime
+    order_url: str
+    archive_api_url: str
+
+
+class MyOrdersResponse(BaseModel):
+    orders: list[MyOrderSummary]
+
+
+class SavedMenuSummary(BaseModel):
+    id: int = Field(gt=0)
+    restaurant_name: str
+    category_count: int = Field(ge=0)
+    item_count: int = Field(ge=0)
+    created_at: datetime
+    updated_at: datetime
+
+
+class SavedMenusResponse(BaseModel):
+    menus: list[SavedMenuSummary]
 
 
 class StoreCreateResponse(BaseModel):

@@ -274,9 +274,12 @@ orderForm.addEventListener("submit", async (event) => {
   orderStatus.dataset.state = "loading";
   orderStatus.hidden = false;
   try {
+    const authHeaders = window.AppAuth?.getAuthorizationHeaders
+      ? await window.AppAuth.getAuthorizationHeaders()
+      : {};
     const response = await fetch(`/api/stores/${currentStore.public_slug}/orders`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...authHeaders },
       body: JSON.stringify({
         customer_name: name,
         items: selections.map(({ item, quantity, note }) => ({

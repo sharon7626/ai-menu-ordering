@@ -15,6 +15,7 @@ class DeploymentReadinessTests(unittest.TestCase):
         self.assertIn("uvicorn==", requirements)
         self.assertIn("psycopg[binary]==3.3.4", requirements)
         self.assertIn("google-genai==", requirements)
+        self.assertIn("firebase-admin==7.5.0", requirements)
 
     def test_render_commands_match_real_fastapi_entrypoint(self):
         guide = (PROJECT_ROOT / "doc" / "render-deployment-guide.md").read_text(
@@ -36,6 +37,8 @@ class DeploymentReadinessTests(unittest.TestCase):
         self.assertIn("!.env.example", gitignore)
         self.assertIn("GEMINI_API_KEY=", example)
         self.assertIn("DATABASE_URL=sqlite:///./app.db", example)
+        self.assertIn("FIREBASE_PROJECT_ID=", example)
+        self.assertIn("FIREBASE_SERVICE_ACCOUNT_JSON=", example)
         self.assertNotIn("postgresql://", example)
 
     def test_frontend_does_not_contain_ai_key_variable(self):
@@ -45,6 +48,28 @@ class DeploymentReadinessTests(unittest.TestCase):
             if path.is_file()
         )
         self.assertNotIn("GEMINI_API_KEY", frontend_source)
+
+    def test_second_release_checklist_has_required_safety_gates(self):
+        checklist = (
+            PROJECT_ROOT / "doc" / "production-deployment-checklist.md"
+        ).read_text(encoding="utf-8")
+
+        for variable_name in (
+            "DATABASE_URL",
+            "GEMINI_API_KEY",
+            "FIREBASE_PROJECT_ID",
+            "FIREBASE_WEB_API_KEY",
+            "FIREBASE_AUTH_DOMAIN",
+            "FIREBASE_APP_ID",
+            "FIREBASE_SERVICE_ACCOUNT_JSON",
+        ):
+            self.assertIn(variable_name, checklist)
+
+        self.assertIn("備份正式 PostgreSQL", checklist)
+        self.assertIn("ADD COLUMN IF NOT EXISTS", checklist)
+        self.assertIn("Auto-Deploy", checklist)
+        self.assertIn("明確批准 commit 與 push", checklist)
+        self.assertIn("不要刪除或重建正式資料庫", checklist)
 
 
 if __name__ == "__main__":

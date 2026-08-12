@@ -1,6 +1,8 @@
 # GitHub 與 Render 部署指南
 
-最後更新：2026-08-10。
+最後更新：2026-08-11。
+
+本文件保留 Render 的固定設定說明；第二版發布前的實際操作順序、備份、migration 與回復方式，請以 [新版 Production 部署前清單](production-deployment-checklist.md) 為準。
 
 ## 1. 部署架構
 
@@ -33,6 +35,11 @@
 | `GEMINI_API_KEY` | 必要 | 使用者自己的 Gemini Developer API Key；只能在 Render 後台設定，不得貼入對話或 Repository。 |
 | `DATABASE_URL` | 必要 | 同區域 Render PostgreSQL 的 Internal Database URL；不得使用 External URL，也不得提交至 Git。 |
 | `GEMINI_MODEL` | 選填 | 模型名稱；未設定時後端使用 `gemini-3.6-flash`。若設定，也維持目前相同模型。 |
+| `FIREBASE_PROJECT_ID` | 帳號功能必要 | Firebase Web App 與 Service Account 所屬的 Project ID。 |
+| `FIREBASE_WEB_API_KEY` | 帳號功能必要 | Firebase Web App 設定值；不是 Gemini API Key。 |
+| `FIREBASE_AUTH_DOMAIN` | 帳號功能必要 | Firebase Web App 的 Auth Domain。 |
+| `FIREBASE_APP_ID` | 帳號功能必要 | Firebase Web App 的 App ID。 |
+| `FIREBASE_SERVICE_ACCOUNT_JSON` | 帳號功能必要、機密 | 完整 Service Account JSON，僅存於 Render，不建立或提交金鑰檔。 |
 
 `PORT` 由 Render 自動設定。`.env.example` 只保留空白 Key 與安全的本機 SQLite 範例。
 
@@ -45,7 +52,7 @@
 5. 測試或短期展示可選 Free，但免費 PostgreSQL 建立 30 天後會到期，不能視為永久正式資料庫。
 6. 建立完成後，在資料庫頁面取得 **Internal Database URL**，直接指定給 Web Service 的 `DATABASE_URL`，不要複製到程式或聊天。
 
-後端 lifespan 會在每次啟動時安全地確認資料表與索引存在。正式 PostgreSQL 從空資料庫開始，不搬本機 `app.db`。
+後端 lifespan 會在每次啟動時安全地確認資料表與索引存在。第一次部署是從正式空資料庫開始且不搬本機 `app.db`；後續版本更新必須沿用既有正式 PostgreSQL，先備份，再由可重複執行的 migration 新增所需資料表、欄位與索引，不得改連新空資料庫。
 
 ## 5. Private GitHub Repository 原則
 

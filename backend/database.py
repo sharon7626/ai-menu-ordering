@@ -1,7 +1,8 @@
 import os
 import json
 import sqlite3
-from datetime import datetime
+import hashlib
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -19,6 +20,16 @@ SQLITE_URL_PREFIX = "sqlite:///"
 
 POSTGRES_SCHEMA_STATEMENTS = (
     """
+    CREATE TABLE IF NOT EXISTS app_users (
+        id BIGSERIAL PRIMARY KEY,
+        firebase_uid TEXT NOT NULL UNIQUE CHECK (char_length(trim(firebase_uid)) > 0),
+        email TEXT,
+        display_name TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+    )
+    """,
+    """
     CREATE TABLE IF NOT EXISTS group_sessions (
         id BIGSERIAL PRIMARY KEY,
         public_code TEXT NOT NULL UNIQUE CHECK (
@@ -31,12 +42,26 @@ POSTGRES_SCHEMA_STATEMENTS = (
         ),
         status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'closed')),
         next_order_sequence INTEGER NOT NULL DEFAULT 1 CHECK (next_order_sequence >= 1),
+        owner_user_id BIGINT REFERENCES app_users(id),
         created_at TEXT NOT NULL,
         closed_at TEXT,
+        archived_at TEXT,
         CHECK (
             (status = 'open' AND closed_at IS NULL)
             OR (status = 'closed' AND closed_at IS NOT NULL)
         )
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS user_saved_menus (
+        id BIGSERIAL PRIMARY KEY,
+        owner_user_id BIGINT NOT NULL REFERENCES app_users(id) ON DELETE CASCADE,
+        restaurant_name TEXT NOT NULL,
+        menu_json TEXT NOT NULL CHECK (jsonb_typeof(menu_json::jsonb) = 'object'),
+        menu_fingerprint TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        UNIQUE (owner_user_id, menu_fingerprint)
     )
     """,
     """
@@ -79,9 +104,11 @@ POSTGRES_SCHEMA_STATEMENTS = (
         store_profile_id BIGINT REFERENCES store_profiles(id),
         public_order_number TEXT,
         order_access_token_hash TEXT,
+        user_id BIGINT REFERENCES app_users(id),
         customer_name TEXT NOT NULL CHECK (char_length(trim(customer_name)) > 0),
         total_amount INTEGER NOT NULL CHECK (total_amount >= 0),
         created_at TEXT NOT NULL,
+        archived_at TEXT,
         CHECK (
             (
                 group_session_id IS NULL
@@ -98,6 +125,10 @@ POSTGRES_SCHEMA_STATEMENTS = (
         CHECK (NOT (group_session_id IS NOT NULL AND store_profile_id IS NOT NULL))
     )
     """,
+    "ALTER TABLE group_sessions ADD COLUMN IF NOT EXISTS owner_user_id BIGINT REFERENCES app_users(id)",
+    "ALTER TABLE group_sessions ADD COLUMN IF NOT EXISTS archived_at TEXT",
+    "ALTER TABLE orders ADD COLUMN IF NOT EXISTS user_id BIGINT REFERENCES app_users(id)",
+    "ALTER TABLE orders ADD COLUMN IF NOT EXISTS archived_at TEXT",
     """
     CREATE TABLE IF NOT EXISTS order_items (
         id BIGSERIAL PRIMARY KEY,
@@ -114,6 +145,9 @@ POSTGRES_SCHEMA_STATEMENTS = (
     """,
     "CREATE INDEX IF NOT EXISTS idx_orders_created_at ON orders(created_at)",
     "CREATE INDEX IF NOT EXISTS idx_order_items_order_id ON order_items(order_id)",
+    "CREATE INDEX IF NOT EXISTS idx_group_sessions_owner_created_at ON group_sessions(owner_user_id, created_at)",
+    "CREATE INDEX IF NOT EXISTS idx_orders_user_created_at ON orders(user_id, created_at)",
+    "CREATE INDEX IF NOT EXISTS idx_saved_menus_owner_updated ON user_saved_menus(owner_user_id, updated_at)",
     """
     CREATE UNIQUE INDEX IF NOT EXISTS idx_orders_public_order_number
     ON orders(public_order_number) WHERE public_order_number IS NOT NULL
@@ -133,6 +167,15 @@ POSTGRES_SCHEMA_STATEMENTS = (
 )
 
 SCHEMA_SQL = """
+CREATE TABLE IF NOT EXISTS app_users (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    firebase_uid TEXT NOT NULL UNIQUE CHECK (length(trim(firebase_uid)) > 0),
+    email TEXT,
+    display_name TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS group_sessions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     public_code TEXT NOT NULL UNIQUE CHECK (
@@ -145,12 +188,27 @@ CREATE TABLE IF NOT EXISTS group_sessions (
     ),
     status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'closed')),
     next_order_sequence INTEGER NOT NULL DEFAULT 1 CHECK (next_order_sequence >= 1),
+    owner_user_id INTEGER,
     created_at TEXT NOT NULL,
     closed_at TEXT,
+    archived_at TEXT,
+    FOREIGN KEY (owner_user_id) REFERENCES app_users(id),
     CHECK (
         (status = 'open' AND closed_at IS NULL)
         OR (status = 'closed' AND closed_at IS NOT NULL)
     )
+);
+
+CREATE TABLE IF NOT EXISTS user_saved_menus (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    owner_user_id INTEGER NOT NULL,
+    restaurant_name TEXT NOT NULL,
+    menu_json TEXT NOT NULL CHECK (json_valid(menu_json)),
+    menu_fingerprint TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    FOREIGN KEY (owner_user_id) REFERENCES app_users(id) ON DELETE CASCADE,
+    UNIQUE (owner_user_id, menu_fingerprint)
 );
 
 CREATE TABLE IF NOT EXISTS group_menus (
@@ -191,11 +249,14 @@ CREATE TABLE IF NOT EXISTS orders (
     store_profile_id INTEGER,
     public_order_number TEXT,
     order_access_token_hash TEXT,
+    user_id INTEGER,
     customer_name TEXT NOT NULL CHECK (length(trim(customer_name)) > 0),
     total_amount INTEGER NOT NULL CHECK (total_amount >= 0),
     created_at TEXT NOT NULL,
+    archived_at TEXT,
     FOREIGN KEY (group_session_id) REFERENCES group_sessions(id),
     FOREIGN KEY (store_profile_id) REFERENCES store_profiles(id),
+    FOREIGN KEY (user_id) REFERENCES app_users(id),
     CHECK (
         (
             group_session_id IS NULL
@@ -231,6 +292,7 @@ ON orders(created_at);
 
 CREATE INDEX IF NOT EXISTS idx_order_items_order_id
 ON order_items(order_id);
+
 """
 
 ORDER_GROUP_COLUMNS = {
@@ -263,6 +325,15 @@ WHERE group_session_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_orders_store_created_at
 ON orders(store_profile_id, created_at)
 WHERE store_profile_id IS NOT NULL;
+
+CREATE INDEX IF NOT EXISTS idx_group_sessions_owner_created_at
+ON group_sessions(owner_user_id, created_at);
+
+CREATE INDEX IF NOT EXISTS idx_orders_user_created_at
+ON orders(user_id, created_at);
+
+CREATE INDEX IF NOT EXISTS idx_saved_menus_owner_updated
+ON user_saved_menus(owner_user_id, updated_at);
 """
 
 
@@ -304,6 +375,18 @@ class StoreOrderValidationError(ValueError):
 
 class StoreOrderAccessDeniedError(ValueError):
     """店家個人訂單不存在或查看 Token 不正確。"""
+
+
+class AccountClaimDeniedError(ValueError):
+    """訪客資料無法以目前 Token 安全綁定至帳號。"""
+
+
+class SavedMenuAccessDeniedError(ValueError):
+    """常用菜單不存在或不屬於目前帳號。"""
+
+
+class AccountArchiveDeniedError(ValueError):
+    """帳號無權封存或恢復指定資料。"""
 
 
 def get_database_path(database_url: str | None = None) -> Path:
@@ -360,6 +443,8 @@ def initialize_database(database_path: Path | None = None) -> Path | str:
         _add_missing_order_group_columns(connection)
         _migrate_orders_for_store_support(connection)
         _add_missing_order_item_note_column(connection)
+        _add_missing_account_columns(connection)
+        _add_missing_archive_columns(connection)
         connection.executescript(GROUP_INDEX_SQL)
         connection.commit()
     finally:
@@ -395,6 +480,76 @@ def _add_missing_order_item_note_column(connection: sqlite3.Connection) -> None:
         connection.execute(
             "ALTER TABLE order_items ADD COLUMN note TEXT NOT NULL DEFAULT ''"
         )
+
+
+def _add_missing_account_columns(connection: sqlite3.Connection) -> None:
+    """只新增可為空的帳號關聯，不替任何既有資料猜測擁有者。"""
+    group_columns = {
+        row["name"] for row in connection.execute("PRAGMA table_info(group_sessions)")
+    }
+    if "owner_user_id" not in group_columns:
+        connection.execute(
+            "ALTER TABLE group_sessions "
+            "ADD COLUMN owner_user_id INTEGER REFERENCES app_users(id)"
+        )
+
+    order_columns = {
+        row["name"] for row in connection.execute("PRAGMA table_info(orders)")
+    }
+    if "user_id" not in order_columns:
+        connection.execute(
+            "ALTER TABLE orders ADD COLUMN user_id INTEGER REFERENCES app_users(id)"
+        )
+
+
+def _add_missing_archive_columns(connection: sqlite3.Connection) -> None:
+    """新增可恢復的帳號清單封存時間，不刪除任何既有資料。"""
+    group_columns = {
+        row["name"] for row in connection.execute("PRAGMA table_info(group_sessions)")
+    }
+    if "archived_at" not in group_columns:
+        connection.execute("ALTER TABLE group_sessions ADD COLUMN archived_at TEXT")
+
+    order_columns = {
+        row["name"] for row in connection.execute("PRAGMA table_info(orders)")
+    }
+    if "archived_at" not in order_columns:
+        connection.execute("ALTER TABLE orders ADD COLUMN archived_at TEXT")
+
+
+def upsert_app_user(
+    *,
+    firebase_uid: str,
+    email: str | None,
+    display_name: str | None,
+    database_path: Path | None = None,
+) -> int:
+    """以已驗證 Firebase UID 建立或更新最小使用者顯示資料。"""
+    now = datetime.now(timezone.utc).isoformat()
+    connection = connect_database(database_path)
+    try:
+        row = connection.execute(
+            """
+            INSERT INTO app_users (
+                firebase_uid, email, display_name, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT(firebase_uid) DO UPDATE SET
+                email = excluded.email,
+                display_name = excluded.display_name,
+                updated_at = excluded.updated_at
+            RETURNING id
+            """,
+            (firebase_uid, email, display_name, now, now),
+        ).fetchone()
+        if row is None:
+            raise sqlite3.DatabaseError("無法取得使用者識別碼")
+        connection.commit()
+        return int(row["id"])
+    except Exception:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
 
 
 def _migrate_orders_for_store_support(connection: sqlite3.Connection) -> None:
@@ -524,6 +679,7 @@ def save_group_menu(
     management_token_hash: str,
     menu: dict,
     created_at: datetime,
+    owner_user_id: int | None = None,
     database_path: Path | None = None,
 ) -> int:
     """以單一交易建立團購及其不可變的菜單快照。"""
@@ -536,16 +692,23 @@ def save_group_menu(
                 management_token_hash,
                 status,
                 next_order_sequence,
+                owner_user_id,
                 created_at
             )
-            VALUES (?, ?, 'open', 1, ?)
+            VALUES (?, ?, 'open', 1, ?, ?)
             """,
-            (public_code, management_token_hash, created_at.isoformat()),
+            (
+                public_code,
+                management_token_hash,
+                owner_user_id,
+                created_at.isoformat(),
+            ),
         )
         group_session_id = cursor.lastrowid
         if group_session_id is None:
             raise sqlite3.DatabaseError("無法取得新團購識別碼")
 
+        menu_json = json.dumps(menu, ensure_ascii=False, separators=(",", ":"))
         connection.execute(
             """
             INSERT INTO group_menus (group_session_id, menu_json, created_at)
@@ -553,10 +716,31 @@ def save_group_menu(
             """,
             (
                 group_session_id,
-                json.dumps(menu, ensure_ascii=False, separators=(",", ":")),
+                menu_json,
                 created_at.isoformat(),
             ),
         )
+        if owner_user_id is not None:
+            fingerprint = hashlib.sha256(menu_json.encode("utf-8")).hexdigest()
+            connection.execute(
+                """
+                INSERT INTO user_saved_menus (
+                    owner_user_id, restaurant_name, menu_json, menu_fingerprint,
+                    created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?)
+                ON CONFLICT(owner_user_id, menu_fingerprint) DO UPDATE SET
+                    restaurant_name = excluded.restaurant_name,
+                    updated_at = excluded.updated_at
+                """,
+                (
+                    owner_user_id,
+                    menu["restaurant"]["name"],
+                    menu_json,
+                    fingerprint,
+                    created_at.isoformat(),
+                    created_at.isoformat(),
+                ),
+            )
         connection.commit()
         return group_session_id
     except Exception:
@@ -597,6 +781,325 @@ def get_public_group_menu(
     }
 
 
+def list_groups_for_owner(
+    *,
+    owner_user_id: int,
+    archived: bool = False,
+    database_path: Path | None = None,
+) -> list[dict]:
+    """列出指定帳號擁有的團購，不回傳任何管理 Token。"""
+    connection = connect_database(database_path)
+    try:
+        rows = connection.execute(
+            """
+            SELECT
+                group_sessions.public_code,
+                group_sessions.status,
+                group_sessions.created_at,
+                group_sessions.closed_at,
+                group_menus.menu_json,
+                COUNT(orders.id) AS order_count,
+                COALESCE(SUM(orders.total_amount), 0) AS grand_total
+            FROM group_sessions
+            JOIN group_menus ON group_menus.group_session_id = group_sessions.id
+            LEFT JOIN orders ON orders.group_session_id = group_sessions.id
+            WHERE group_sessions.owner_user_id = ?
+              AND group_sessions.archived_at IS {archive_null_test}
+            GROUP BY
+                group_sessions.id,
+                group_sessions.public_code,
+                group_sessions.status,
+                group_sessions.created_at,
+                group_sessions.closed_at,
+                group_menus.menu_json
+            ORDER BY group_sessions.created_at DESC, group_sessions.id DESC
+            """.format(archive_null_test="NOT NULL" if archived else "NULL"),
+            (owner_user_id,),
+        ).fetchall()
+    finally:
+        connection.close()
+    return [
+        {
+            "public_code": row["public_code"],
+            "restaurant_name": json.loads(row["menu_json"])["restaurant"]["name"],
+            "status": row["status"],
+            "created_at": row["created_at"],
+            "closed_at": row["closed_at"],
+            "order_count": row["order_count"],
+            "grand_total": row["grand_total"],
+        }
+        for row in rows
+    ]
+
+
+def list_saved_menus_for_owner(
+    *, owner_user_id: int, database_path: Path | None = None
+) -> list[dict]:
+    connection = connect_database(database_path)
+    try:
+        rows = connection.execute(
+            """
+            SELECT id, restaurant_name, menu_json, created_at, updated_at
+            FROM user_saved_menus
+            WHERE owner_user_id = ?
+            ORDER BY updated_at DESC, id DESC
+            """,
+            (owner_user_id,),
+        ).fetchall()
+    finally:
+        connection.close()
+    return [
+        {
+            "id": row["id"],
+            "restaurant_name": row["restaurant_name"],
+            "category_count": len(json.loads(row["menu_json"])["categories"]),
+            "item_count": sum(
+                len(category["items"])
+                for category in json.loads(row["menu_json"])["categories"]
+            ),
+            "created_at": row["created_at"],
+            "updated_at": row["updated_at"],
+        }
+        for row in rows
+    ]
+
+
+def get_saved_menu_for_owner(
+    *, menu_id: int, owner_user_id: int, database_path: Path | None = None
+) -> dict | None:
+    connection = connect_database(database_path)
+    try:
+        row = connection.execute(
+            "SELECT menu_json FROM user_saved_menus WHERE id = ? AND owner_user_id = ?",
+            (menu_id, owner_user_id),
+        ).fetchone()
+    finally:
+        connection.close()
+    return json.loads(row["menu_json"]) if row is not None else None
+
+
+def list_orders_for_user(
+    *,
+    user_id: int,
+    archived: bool = False,
+    database_path: Path | None = None,
+) -> list[dict]:
+    """列出指定帳號的團購與店家訂單，不回傳查看 Token。"""
+    connection = connect_database(database_path)
+    try:
+        rows = connection.execute(
+            """
+            SELECT
+                orders.public_order_number,
+                orders.customer_name,
+                orders.total_amount,
+                orders.created_at,
+                group_sessions.public_code,
+                group_menus.menu_json AS group_menu_json,
+                store_profiles.public_slug,
+                store_menus.menu_json AS store_menu_json
+            FROM orders
+            LEFT JOIN group_sessions ON group_sessions.id = orders.group_session_id
+            LEFT JOIN group_menus ON group_menus.group_session_id = group_sessions.id
+            LEFT JOIN store_profiles ON store_profiles.id = orders.store_profile_id
+            LEFT JOIN store_menus ON store_menus.store_profile_id = store_profiles.id
+            WHERE orders.user_id = ?
+              AND orders.public_order_number IS NOT NULL
+              AND orders.archived_at IS {archive_null_test}
+            ORDER BY orders.created_at DESC, orders.id DESC
+            """.format(archive_null_test="NOT NULL" if archived else "NULL"),
+            (user_id,),
+        ).fetchall()
+    finally:
+        connection.close()
+
+    results = []
+    for row in rows:
+        is_group = row["public_code"] is not None
+        menu_json = row["group_menu_json"] if is_group else row["store_menu_json"]
+        results.append(
+            {
+                "mode": "group" if is_group else "store",
+                "restaurant_name": json.loads(menu_json)["restaurant"]["name"],
+                "public_code": row["public_code"],
+                "public_slug": row["public_slug"],
+                "public_order_number": row["public_order_number"],
+                "customer_name": row["customer_name"],
+                "total_amount": row["total_amount"],
+                "created_at": row["created_at"],
+            }
+        )
+    return results
+
+
+def set_group_archive_for_owner(
+    *,
+    public_code: str,
+    owner_user_id: int,
+    archived: bool,
+    database_path: Path | None = None,
+) -> None:
+    """只允許帳號擁有者封存或恢復團購；不更動團購與訂單內容。"""
+    archived_at = datetime.now(timezone.utc).isoformat() if archived else None
+    connection = connect_database(database_path)
+    try:
+        cursor = connection.execute(
+            """
+            UPDATE group_sessions
+            SET archived_at = ?
+            WHERE public_code = ? AND owner_user_id = ?
+            """,
+            (archived_at, public_code, owner_user_id),
+        )
+        if cursor.rowcount != 1:
+            raise AccountArchiveDeniedError
+        connection.commit()
+    except Exception:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
+
+
+def set_order_archive_for_user(
+    *,
+    mode: str,
+    parent_identifier: str,
+    public_order_number: str,
+    user_id: int,
+    archived: bool,
+    database_path: Path | None = None,
+) -> None:
+    """只允許訂單擁有者封存或恢復自己的團購／店家訂單。"""
+    if mode == "group":
+        parent_join = "JOIN group_sessions parent ON parent.id = orders.group_session_id"
+        parent_column = "parent.public_code"
+    elif mode == "store":
+        parent_join = "JOIN store_profiles parent ON parent.id = orders.store_profile_id"
+        parent_column = "parent.public_slug"
+    else:
+        raise ValueError("不支援的訂單模式")
+
+    connection = connect_database(database_path)
+    try:
+        row = connection.execute(
+            f"""
+            SELECT orders.id
+            FROM orders
+            {parent_join}
+            WHERE {parent_column} = ?
+              AND orders.public_order_number = ?
+              AND orders.user_id = ?
+            """,
+            (parent_identifier, public_order_number, user_id),
+        ).fetchone()
+        if row is None:
+            raise AccountArchiveDeniedError
+        archived_at = datetime.now(timezone.utc).isoformat() if archived else None
+        cursor = connection.execute(
+            "UPDATE orders SET archived_at = ? WHERE id = ? AND user_id = ?",
+            (archived_at, row["id"], user_id),
+        )
+        if cursor.rowcount != 1:
+            raise AccountArchiveDeniedError
+        connection.commit()
+    except Exception:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
+
+
+def claim_group_for_user(
+    *,
+    public_code: str,
+    management_token_hash: str,
+    user_id: int,
+    database_path: Path | None = None,
+) -> None:
+    """以管理 Token 原子化認領訪客團購；不覆蓋其他擁有者。"""
+    connection = connect_database(database_path)
+    try:
+        connection.execute("BEGIN IMMEDIATE")
+        cursor = connection.execute(
+            """
+            UPDATE group_sessions
+            SET owner_user_id = ?
+            WHERE public_code = ?
+              AND management_token_hash = ?
+              AND owner_user_id IS NULL
+            """,
+            (user_id, public_code, management_token_hash),
+        )
+        if cursor.rowcount != 1:
+            existing = connection.execute(
+                """
+                SELECT owner_user_id
+                FROM group_sessions
+                WHERE public_code = ? AND management_token_hash = ?
+                """,
+                (public_code, management_token_hash),
+            ).fetchone()
+            if existing is None or existing["owner_user_id"] != user_id:
+                raise AccountClaimDeniedError
+        connection.commit()
+    except Exception:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
+
+
+def claim_order_for_user(
+    *,
+    mode: str,
+    parent_identifier: str,
+    public_order_number: str,
+    order_access_token_hash: str,
+    user_id: int,
+    database_path: Path | None = None,
+) -> None:
+    """以查看 Token 原子化認領訪客訂單；團購與店家共用同一安全規則。"""
+    if mode == "group":
+        parent_join = "JOIN group_sessions parent ON parent.id = orders.group_session_id"
+        parent_column = "parent.public_code"
+    elif mode == "store":
+        parent_join = "JOIN store_profiles parent ON parent.id = orders.store_profile_id"
+        parent_column = "parent.public_slug"
+    else:
+        raise ValueError("不支援的訂單模式")
+
+    connection = connect_database(database_path)
+    try:
+        connection.execute("BEGIN IMMEDIATE")
+        row = connection.execute(
+            f"""
+            SELECT orders.id, orders.user_id
+            FROM orders
+            {parent_join}
+            WHERE {parent_column} = ?
+              AND orders.public_order_number = ?
+              AND orders.order_access_token_hash = ?
+            """,
+            (parent_identifier, public_order_number, order_access_token_hash),
+        ).fetchone()
+        if row is None or row["user_id"] not in (None, user_id):
+            raise AccountClaimDeniedError
+        if row["user_id"] is None:
+            cursor = connection.execute(
+                "UPDATE orders SET user_id = ? WHERE id = ? AND user_id IS NULL",
+                (user_id, row["id"]),
+            )
+            if cursor.rowcount != 1:
+                raise AccountClaimDeniedError
+        connection.commit()
+    except Exception:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
+
+
 def save_group_order(
     *,
     public_code: str,
@@ -604,6 +1107,7 @@ def save_group_order(
     selections: list[dict],
     order_access_token_hash: str,
     created_at: datetime,
+    user_id: int | None = None,
     database_path: Path | None = None,
 ) -> dict:
     """依團購菜單快照重新核價，並在單一交易中建立個人訂單。"""
@@ -673,16 +1177,18 @@ def save_group_order(
                 group_session_id,
                 public_order_number,
                 order_access_token_hash,
+                user_id,
                 customer_name,
                 total_amount,
                 created_at
             )
-            VALUES (?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 group_row["id"],
                 public_order_number,
                 order_access_token_hash,
+                user_id,
                 customer_name,
                 total_amount,
                 created_at.isoformat(),
@@ -748,6 +1254,7 @@ def get_group_order_for_access_check(
                 orders.id AS order_id,
                 orders.public_order_number,
                 orders.order_access_token_hash,
+                orders.user_id,
                 orders.customer_name,
                 orders.total_amount,
                 orders.created_at,
@@ -780,6 +1287,7 @@ def get_group_order_for_access_check(
         "restaurant_name": menu["restaurant"]["name"],
         "public_order_number": first["public_order_number"],
         "order_access_token_hash": first["order_access_token_hash"],
+        "user_id": first["user_id"],
         "customer_name": first["customer_name"],
         "total_amount": first["total_amount"],
         "created_at": first["created_at"],
@@ -812,6 +1320,7 @@ def get_group_management_data_for_access_check(
                 group_sessions.id,
                 group_sessions.public_code,
                 group_sessions.management_token_hash,
+                group_sessions.owner_user_id,
                 group_sessions.status,
                 group_sessions.created_at,
                 group_sessions.closed_at,
@@ -876,6 +1385,7 @@ def get_group_management_data_for_access_check(
     return {
         "public_code": group_row["public_code"],
         "management_token_hash": group_row["management_token_hash"],
+        "owner_user_id": group_row["owner_user_id"],
         "restaurant_name": menu["restaurant"]["name"],
         "status": group_row["status"],
         "created_at": group_row["created_at"],
@@ -1073,6 +1583,7 @@ def save_store_order(
     selections: list[dict],
     order_access_token_hash: str,
     created_at: datetime,
+    user_id: int | None = None,
     database_path: Path | None = None,
 ) -> dict:
     """依店家目前菜單重新核價，並在單一交易中建立個人訂單。"""
@@ -1141,16 +1652,18 @@ def save_store_order(
                 store_profile_id,
                 public_order_number,
                 order_access_token_hash,
+                user_id,
                 customer_name,
                 total_amount,
                 created_at
             )
-            VALUES (?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 store_row["id"],
                 public_order_number,
                 order_access_token_hash,
+                user_id,
                 customer_name,
                 total_amount,
                 created_at.isoformat(),
@@ -1208,6 +1721,7 @@ def get_store_order_for_access_check(
             SELECT
                 orders.public_order_number,
                 orders.order_access_token_hash,
+                orders.user_id,
                 orders.customer_name,
                 orders.total_amount,
                 orders.created_at,
@@ -1240,6 +1754,7 @@ def get_store_order_for_access_check(
         "restaurant_name": menu["restaurant"]["name"],
         "public_order_number": first["public_order_number"],
         "order_access_token_hash": first["order_access_token_hash"],
+        "user_id": first["user_id"],
         "customer_name": first["customer_name"],
         "total_amount": first["total_amount"],
         "created_at": first["created_at"],

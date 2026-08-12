@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="使用已確認菜單再次建立團購">
+    <title>我的菜單｜席間</title>
+    <link rel="stylesheet" href="/frontend/design-system.css?v=20260811-1">
+    <link rel="stylesheet" href="/frontend/navigation.css?v=20260811-3">
+    <link rel="stylesheet" href="/frontend/my.css">
+    <link rel="stylesheet" href="/frontend/brand-pages.css?v=20260811-1">
+    <script src="/frontend/auth.js?v=20260811-1" type="module"></script>
+    <script src="/frontend/my-menus.js?v=20260811-2" type="module"></script>
+  </head>
+  <body>
+    <nav class="top-home-nav" aria-label="主要導覽"><a class="top-home-brand" href="/" aria-label="席間首頁"><span class="top-home-brand-mark" aria-hidden="true">席</span><span class="top-home-brand-name">席間<small>MENU · ORDER · TOGETHER</small></span></a></nav>
+    <header class="my-header">
+      <p>帳號專區</p><h1>我的菜單</h1>
+      <p>登入狀態下建立過的團購菜單會保存在這裡，下次不必重新辨識。</p>
+    </header>
+    <main class="my-shell">
+      <p id="my-menus-status" class="my-status" role="status" aria-live="polite">菜單載入中</p>
+      <section id="my-menus-content" hidden>
+        <div id="my-menus-list" class="my-list"></div>
+        <div id="my-menus-empty" class="my-empty" hidden><h2>還沒有已保存的菜單</h2><p>登入後建立一次團購，確認菜單就會安全保存在這裡。</p></div>
+      </section>
+    </main>
+  </body>
+</html>

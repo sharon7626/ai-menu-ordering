@@ -3,75 +3,223 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="description" content="上傳菜單建立團購，或使用代碼加入點餐">
-    <title>AI 菜單點餐系統</title>
-    <link rel="stylesheet" href="/frontend/home.css">
-    <script src="/frontend/home.js" defer></script>
+    <meta name="description" content="席間：上傳菜單建立團購，或使用代碼加入點餐">
+    <title>席間｜MENU · ORDER · TOGETHER</title>
+    <link rel="stylesheet" href="/frontend/design-system.css?v=20260811-1">
+    <link rel="stylesheet" href="/frontend/home.css?v=20260811-5">
+    <script src="/frontend/home.js?v=20260811-3" defer></script>
+    <script src="/frontend/auth.js?v=20260811-1" type="module"></script>
   </head>
   <body>
-    <header class="hero">
-      <div class="hero-inner">
-        <p class="eyebrow">AI 菜單點餐系統</p>
-        <h1>上傳一張菜單，大家就能一起點餐</h1>
-        <p>主揪先用 AI 讀出菜名與價格並建立團購，再把連結或 6 碼代碼分享給其他人。</p>
+    <header class="home-hero">
+      <nav class="home-nav ds-container" aria-label="首頁導覽">
+        <a class="brand" href="/" aria-label="席間首頁">
+          <span class="brand-mark" aria-hidden="true">席</span>
+          <span class="brand-name">席間<small>MENU · ORDER · TOGETHER</small></span>
+        </a>
+        <div id="auth-nav" class="auth-nav" aria-label="帳號功能" hidden>
+          <button id="auth-open-button" class="nav-link auth-button" type="button">登入</button>
+          <div id="auth-user-menu" class="auth-user-menu" hidden>
+            <span id="auth-user-name"></span>
+            <a class="nav-link" href="/me/groups">我的團購</a>
+            <a class="nav-link" href="/me/orders">我的訂單</a>
+            <a class="nav-link" href="/me/menus">我的菜單</a>
+            <button id="auth-sign-out-button" class="nav-link auth-button" type="button">登出</button>
+          </div>
+        </div>
+      </nav>
+
+      <div class="hero-stage ds-container">
+        <div class="hero-copy reveal">
+          <p class="eyebrow">團購點餐 · 店家掃碼點餐</p>
+          <h1>一張菜單，<br>讓大家一起點。</h1>
+          <p class="hero-lead">臨時揪團，或店家日常接單。上傳一張菜單，分享給大家，餐點與金額自然整理。</p>
+          <div class="hero-use-cases" aria-label="席間的兩種使用方式">
+            <p><span>GROUP ORDER</span><strong>團購點餐</strong><small>主揪建立，大家用代碼加入</small></p>
+            <p><span>SHOP ORDER</span><strong>店家掃碼點餐</strong><small>固定菜單，顧客掃碼送單</small></p>
+          </div>
+          <div class="hero-actions">
+            <a class="cta primary" data-magnetic href="/upload?mode=group">
+              <span>建立新團購</span><i aria-hidden="true">↗</i>
+            </a>
+            <button class="cta text-link" type="button" data-open-join><span>我有團購代碼</span><i aria-hidden="true">↗</i></button>
+            <a class="cta store-entry" href="/upload?mode=store"><span>店家建立固定菜單</span><i aria-hidden="true">↗</i></a>
+          </div>
+          <span class="organizer-label">我是主揪／統籌</span>
+          <div class="hero-account-row">
+            <button class="hero-login-trigger" type="button" data-open-auth>使用 Google 登入</button>
+            <p class="account-hint">不用登入也能使用 <span aria-hidden="true">·</span> 登入可找回團購、訂單與已儲存菜單</p>
+          </div>
+        </div>
+
+        <div class="hero-orbit" aria-hidden="true" data-parallax-root>
+          <div class="organic-shape" data-depth="0.35"></div>
+          <div class="receipt" data-depth="0.75">
+            <p>席間 / ORDER 03</p>
+            <strong>大家想吃的<br>都在這裡</strong>
+            <span class="receipt-row">火腿蛋吐司 <b>× 3</b></span>
+            <span class="receipt-row">紅茶 L <b>× 4</b></span>
+            <span class="receipt-total">NT$ 1,280</span>
+          </div>
+          <span class="orbit-word word-menu" data-depth="0.95">MENU</span>
+        </div>
       </div>
     </header>
 
-    <main class="page-shell">
-      <section class="start-section" aria-labelledby="start-title">
+    <main>
+      <section class="process ds-container reveal" aria-labelledby="process-title">
         <div class="section-heading">
-          <p>一般團購</p>
-          <h2 id="start-title">你現在要做什麼？</h2>
+          <p class="section-index"><span>01</span> HOW IT FLOWS</p>
+          <h2 id="process-title">從菜單到統計，<br>自然地完成。</h2>
+          <p>主揪上傳菜單後，席間整理品項；分享代碼，大家各自點餐，最後取得清楚統計。</p>
         </div>
 
-        <div class="mode-grid">
-          <article class="mode-card organizer-card">
-            <p class="mode-label">我是主揪／統籌</p>
-            <h3>發起一個新團購</h3>
-            <ol class="mini-flow">
-              <li>上傳這次要訂的菜單</li>
-              <li>確認 AI 讀出的菜名與價格</li>
-              <li>取得連結與代碼，分享給大家</li>
-            </ol>
-            <a class="primary-action" href="/upload?mode=group">上傳菜單，建立團購</a>
-          </article>
+        <div class="flow-experience">
+          <div class="flow-tabs" role="tablist" aria-label="團購建立流程">
+            <button id="flow-tab-1" class="flow-tab is-active" type="button" role="tab" aria-selected="true" aria-controls="flow-panel-1" data-flow-step="1">
+              <span>01</span><strong>上傳菜單</strong><small>JPG、PNG 或一頁式 PDF</small>
+            </button>
+            <button id="flow-tab-2" class="flow-tab" type="button" role="tab" aria-selected="false" aria-controls="flow-panel-2" data-flow-step="2" tabindex="-1">
+              <span>02</span><strong>AI 擷取菜名與價格</strong><small>確認這次要提供的品項</small>
+            </button>
+            <button id="flow-tab-3" class="flow-tab" type="button" role="tab" aria-selected="false" aria-controls="flow-panel-3" data-flow-step="3" tabindex="-1">
+              <span>03</span><strong>分享連結或代碼</strong><small>大家各自點餐與備註</small>
+            </button>
+            <button id="flow-tab-4" class="flow-tab" type="button" role="tab" aria-selected="false" aria-controls="flow-panel-4" data-flow-step="4" tabindex="-1">
+              <span>04</span><strong>主揪查看統計</strong><small>個人與餐點明細一次整理</small>
+            </button>
+          </div>
 
-          <article id="join-group" class="mode-card participant-card">
-            <p class="mode-label">我是一起點餐的人</p>
-            <h3>加入已經建立的團購</h3>
-            <p>請向主揪取得 6 碼團購代碼；你不需要再上傳菜單。</p>
-            <form id="quick-join-form" class="quick-join" novalidate>
-              <label for="quick-group-code">輸入 6 碼團購代碼</label>
-              <div>
-                <input id="quick-group-code" maxlength="6" autocomplete="off" required>
-                <button type="submit">進入點餐</button>
+          <div class="flow-preview" aria-live="polite">
+            <article id="flow-panel-1" class="flow-panel is-active" role="tabpanel" aria-labelledby="flow-tab-1" data-flow-panel="1">
+              <p class="preview-label">UPLOAD</p>
+              <div class="demo-upload-stage">
+                <div class="virtual-menu virtual-menu--incoming">
+                  <small>晨光早餐</small>
+                  <strong>MENU</strong>
+                  <span>火腿蛋吐司&nbsp;&nbsp;55</span>
+                  <span>薯餅&nbsp;&nbsp;35</span>
+                  <span>紅茶 L&nbsp;&nbsp;35</span>
+                </div>
+                <div class="mini-drop">
+                  <span class="mini-file-icon" aria-hidden="true">↥</span>
+                  <strong>拖曳菜單至此</strong>
+                  <span>或從裝置選擇檔案</span>
+                </div>
               </div>
-              <p id="quick-join-status" role="status" hidden></p>
-            </form>
-          </article>
+              <div class="mini-file"><i aria-hidden="true"></i><span><strong>menu.jpg</strong><small>2.4 MB · 準備完成</small></span><b>✓</b></div>
+            </article>
+
+            <article id="flow-panel-2" class="flow-panel" role="tabpanel" aria-labelledby="flow-tab-2" data-flow-panel="2" hidden>
+              <p class="preview-label">MENU, SORTED</p>
+              <div class="recognition-demo">
+                <div class="virtual-menu virtual-menu--scan">
+                  <small>晨光早餐</small><strong>MENU</strong>
+                  <span>火腿蛋吐司&nbsp;&nbsp;55</span><span>薯餅&nbsp;&nbsp;35</span><span>紅茶 L&nbsp;&nbsp;35</span>
+                  <i aria-hidden="true"></i>
+                </div>
+                <div class="mini-menu">
+                  <strong>早餐</strong>
+                  <p><span>火腿蛋吐司</span><b>NT$ 55</b></p>
+                  <p><span>薯餅</span><b>NT$ 35</b></p>
+                  <p><span>紅茶 L</span><b>NT$ 35</b></p>
+                </div>
+              </div>
+              <span class="preview-status"><i aria-hidden="true"></i><span class="status-reading">擷取中</span><span class="status-done">整理完成</span></span>
+            </article>
+
+            <article id="flow-panel-3" class="flow-panel" role="tabpanel" aria-labelledby="flow-tab-3" data-flow-panel="3" hidden>
+              <p class="preview-label">READY TO SHARE</p>
+              <div class="mini-share">
+                <div><small>團購代碼</small><strong>AB12CD</strong><button class="demo-copy" type="button" data-demo-copy>複製分享連結</button></div>
+                <div class="mini-qr" aria-label="QR Code 示意圖"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+              </div>
+              <p class="share-note">一個代碼，讓每個人從自己的手機加入。</p>
+            </article>
+
+            <article id="flow-panel-4" class="flow-panel" role="tabpanel" aria-labelledby="flow-tab-4" data-flow-panel="4" hidden>
+              <p class="preview-label">ORDER SUMMARY</p>
+              <div class="mini-metrics">
+                <p><strong>12</strong><span>PEOPLE</span></p>
+                <p><strong>23</strong><span>ITEMS</span></p>
+                <p><strong>1,860</strong><span>NT$</span></p>
+              </div>
+              <div class="mini-summary"><p><span>火腿蛋吐司</span><b>6</b></p><p><span>紅茶</span><b>9</b></p><p><span>薯餅</span><b>4</b></p></div>
+            </article>
+          </div>
         </div>
       </section>
 
-      <section class="shared-flow" aria-labelledby="group-flow-title">
-        <h2 id="group-flow-title">團購完整流程</h2>
-        <div class="flow-steps">
-          <p><strong>1</strong><span>主揪上傳菜單</span></p>
-          <p><strong>2</strong><span>AI 擷取菜名與價格</span></p>
-          <p><strong>3</strong><span>分享連結或代碼</span></p>
-          <p><strong>4</strong><span>大家各自點餐</span></p>
-          <p><strong>5</strong><span>主揪查看統計</span></p>
+      <section class="store-section ds-container reveal" aria-labelledby="store-title">
+        <div class="store-copy">
+          <p class="section-index"><span>02</span> FOR EVERYDAY SHOPS</p>
+          <h2 id="store-title">店家的菜單，<br>顧客掃碼就能點。</h2>
+          <p>給早餐店、飲料店與小吃店的日常點餐工具。店家建立固定菜單，將 QR Code 分享給顧客，訂單自然彙整。</p>
+          <a class="cta text-link" href="/upload?mode=store"><span>建立店家固定菜單</span><i aria-hidden="true">↗</i></a>
+        </div>
+        <div class="store-mockup" data-spatial-root aria-label="店家先建立固定菜單，顧客掃碼點餐，系統再彙整訂單的流程示意">
+          <div class="store-mockup-head"><span>固定菜單如何運作</span><i aria-hidden="true"></i></div>
+          <div class="store-journey">
+            <article class="store-step store-step-menu" data-depth="0.35">
+              <span>01</span><small>店家建立菜單</small>
+              <strong>晨光早餐</strong>
+              <p><i>蛋吐司</i><b>55</b></p><p><i>紅茶</i><b>35</b></p>
+            </article>
+            <span class="store-flow-arrow" aria-hidden="true">→</span>
+            <article class="store-step store-step-scan" data-depth="0.65">
+              <span>02</span><small>顧客掃碼點餐</small>
+              <div class="store-qr" aria-hidden="true"></div>
+              <strong>掃描後直接選餐</strong>
+            </article>
+            <span class="store-flow-arrow" aria-hidden="true">→</span>
+            <article class="store-step store-step-orders" data-depth="0.9">
+              <span>03</span><small>訂單自動彙整</small>
+              <p><i>3 位顧客</i><b>5 份</b></p>
+              <p><i>訂單總額</i><b>NT$ 275</b></p>
+              <strong>可以查看或下載 Excel</strong>
+            </article>
+          </div>
+          <p class="store-stage-caption">一次設定固定菜單，顧客之後都能使用同一個網址或 QR Code 點餐。</p>
         </div>
       </section>
 
-      <section class="store-section" aria-labelledby="store-title">
-        <div>
-          <p class="mode-label">我是餐廳店家</p>
-          <h2 id="store-title">建立長期使用的店家菜單</h2>
-          <p>店家上傳自己的菜單，取得固定點餐網址與 QR Code。這和上面的單次團購是不同用途。</p>
+      <section class="account-value reveal">
+        <div class="ds-container account-layout">
+          <div>
+            <p class="section-index"><span>03</span> OPTIONAL ACCOUNT</p>
+            <h2>登入不是必要。<br>只是讓你的紀錄，不會再走失。</h2>
+          </div>
+          <div class="account-detail">
+            <p>使用 Google 登入後，即可跨裝置找回團購、訂單與已儲存菜單。</p>
+            <button class="cta account-login-trigger" type="button" data-open-auth><span>使用 Google 登入</span><i aria-hidden="true">↗</i></button>
+          </div>
         </div>
-        <a class="store-action" href="/upload?mode=store">建立店家固定菜單</a>
       </section>
-
     </main>
+
+    <footer class="home-footer ds-container">
+      <span>席間</span><span>MENU · ORDER · TOGETHER</span>
+    </footer>
+
+    <dialog id="quick-join-dialog" class="quick-join-dialog" aria-labelledby="quick-join-title">
+      <form method="dialog"><button class="dialog-close" aria-label="關閉團購代碼輸入視窗" value="cancel">×</button></form>
+      <p class="section-kicker">JOIN A GROUP</p>
+      <h2 id="quick-join-title">輸入代碼，直接點餐。</h2>
+      <p>我是一起點餐的人，不需要再次上傳菜單。</p>
+      <form id="quick-join-form" class="quick-join" novalidate>
+        <label for="quick-group-code">6 碼團購代碼</label>
+        <div><input id="quick-group-code" maxlength="6" autocomplete="off" required placeholder="例如 KF3DYZ"><button type="submit">進入團購 <span aria-hidden="true">↗</span></button></div>
+        <p id="quick-join-status" role="status" hidden></p>
+      </form>
+    </dialog>
+
+    <dialog id="auth-dialog" class="auth-dialog" aria-labelledby="auth-dialog-title">
+      <form method="dialog"><button class="auth-dialog-close" aria-label="關閉登入視窗" value="cancel">×</button></form>
+      <p class="section-kicker">WELCOME BACK</p>
+      <h2 id="auth-dialog-title">登入帳號</h2>
+      <p>登入後可跨裝置找回資料；現在不登入也能繼續使用原本功能。</p>
+      <button id="auth-google-button" class="google-sign-in" type="button">使用 Google 帳號繼續</button>
+      <p id="auth-status" class="auth-status" role="status" hidden></p>
+    </dialog>
   </body>
 </html>

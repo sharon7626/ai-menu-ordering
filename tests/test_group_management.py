@@ -145,6 +145,10 @@ class GroupManagementTests(unittest.TestCase):
         )
 
         self.assertIn('id="download-excel"', page)
+        self.assertIn(
+            '<script src="/frontend/group-management.js?v=20260811-2" type="module"></script>',
+            page,
+        )
         self.assertIn("summariesByItem", script)
         self.assertIn("management.xlsx", script)
         self.assertIn("一般（無備註）", script)

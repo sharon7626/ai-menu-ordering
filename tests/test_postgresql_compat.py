@@ -126,8 +126,20 @@ class PostgreSQLCompatibilityTests(unittest.TestCase):
         self.assertTrue(fake_connection.closed)
         combined_schema = "\n".join(fake_connection.statements)
         self.assertIn("CREATE TABLE IF NOT EXISTS group_sessions", combined_schema)
+        self.assertIn("CREATE TABLE IF NOT EXISTS app_users", combined_schema)
         self.assertIn("CREATE TABLE IF NOT EXISTS store_profiles", combined_schema)
         self.assertIn("CREATE TABLE IF NOT EXISTS orders", combined_schema)
+        self.assertIn("owner_user_id", combined_schema)
+        self.assertIn("user_id", combined_schema)
+        self.assertIn("archived_at", combined_schema)
+        self.assertIn(
+            "ALTER TABLE group_sessions ADD COLUMN IF NOT EXISTS archived_at TEXT",
+            combined_schema,
+        )
+        self.assertIn(
+            "ALTER TABLE orders ADD COLUMN IF NOT EXISTS archived_at TEXT",
+            combined_schema,
+        )
         self.assertNotIn("user:secret", combined_schema)
 
     def test_connect_database_routes_postgres_url_without_treating_it_as_path(self):

@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="查看自己建立的團購">
+    <title>我的團購｜席間</title>
+    <link rel="stylesheet" href="/frontend/design-system.css?v=20260811-1">
+    <link rel="stylesheet" href="/frontend/navigation.css?v=20260811-3">
+    <link rel="stylesheet" href="/frontend/my.css?v=20260811-2">
+    <link rel="stylesheet" href="/frontend/brand-pages.css?v=20260811-1">
+    <script src="/frontend/auth.js?v=20260811-1" type="module"></script>
+    <script src="/frontend/my-groups.js?v=20260811-4" type="module"></script>
+  </head>
+  <body>
+    <nav class="top-home-nav" aria-label="主要導覽"><a class="top-home-brand" href="/" aria-label="席間首頁"><span class="top-home-brand-mark" aria-hidden="true">席</span><span class="top-home-brand-name">席間<small>MENU · ORDER · TOGETHER</small></span></a></nav>
+    <header class="my-header">
+      <p>帳號專區</p>
+      <h1>我的團購</h1>
+      <p>登入後建立的團購會保存在這裡，換一台裝置也能找回。</p>
+    </header>
+    <main class="my-shell">
+      <p id="my-groups-status" class="my-status" role="status" aria-live="polite">團購載入中</p>
+      <section id="my-groups-content" hidden>
+        <div class="my-actions"><a href="/me/menus">從我的菜單再次開團</a><a href="/upload?mode=group">建立新團購</a></div>
+        <div class="my-view-toggle" role="group" aria-label="團購顯示範圍">
+          <button type="button" data-archive-view="current" aria-pressed="true">目前團購</button>
+          <button type="button" data-archive-view="archived" aria-pressed="false">已封存</button>
+        </div>
+        <div id="my-groups-list" class="my-list"></div>
+        <div id="my-groups-empty" class="my-empty" hidden>
+          <h2 id="my-groups-empty-title">還沒有已保存的團購</h2>
+          <p id="my-groups-empty-copy">登入狀態下建立新團購，之後就能從這裡跨裝置找回。</p>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>

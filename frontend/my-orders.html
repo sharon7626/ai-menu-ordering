@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="查看自己的團購與店家訂單">
+    <title>我的訂單｜席間</title>
+    <link rel="stylesheet" href="/frontend/design-system.css?v=20260811-1">
+    <link rel="stylesheet" href="/frontend/navigation.css?v=20260811-3">
+    <link rel="stylesheet" href="/frontend/my.css?v=20260811-2">
+    <link rel="stylesheet" href="/frontend/brand-pages.css?v=20260811-1">
+    <script src="/frontend/auth.js?v=20260811-1" type="module"></script>
+    <script src="/frontend/my-orders.js?v=20260811-3" type="module"></script>
+  </head>
+  <body>
+    <nav class="top-home-nav" aria-label="主要導覽"><a class="top-home-brand" href="/" aria-label="席間首頁"><span class="top-home-brand-mark" aria-hidden="true">席</span><span class="top-home-brand-name">席間<small>MENU · ORDER · TOGETHER</small></span></a></nav>
+    <header class="my-header">
+      <p>帳號專區</p>
+      <h1>我的訂單</h1>
+      <p>登入後送出的團購與店家訂單，都能跨裝置從這裡找回。</p>
+    </header>
+    <main class="my-shell">
+      <p id="my-orders-status" class="my-status" role="status" aria-live="polite">訂單載入中</p>
+      <section id="my-orders-content" hidden>
+        <div class="my-view-toggle" role="group" aria-label="訂單顯示範圍">
+          <button type="button" data-archive-view="current" aria-pressed="true">目前訂單</button>
+          <button type="button" data-archive-view="archived" aria-pressed="false">已封存</button>
+        </div>
+        <div id="my-orders-list" class="my-list"></div>
+        <div id="my-orders-empty" class="my-empty" hidden>
+          <h2 id="my-orders-empty-title">還沒有已保存的訂單</h2>
+          <p id="my-orders-empty-copy">登入狀態下完成送單，之後就能從這裡跨裝置找回。</p>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>

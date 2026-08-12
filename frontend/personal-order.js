@@ -8,6 +8,9 @@ const totalAmount = document.querySelector("#total-amount");
 const createdAt = document.querySelector("#created-at");
 const backToGroup = document.querySelector("#back-to-group");
 const orderModeLabel = document.querySelector("#order-mode-label");
+const claimOrderButton = document.querySelector("#claim-order");
+let currentValues = null;
+let currentOrderToken = "";
 
 function pathValues() {
   const groupMatch = window.location.pathname.match(
@@ -18,6 +21,7 @@ function pathValues() {
     return {
       mode: "group",
       apiUrl: `/api/groups/${encodeURIComponent(publicCode)}/orders/${encodeURIComponent(groupMatch[2])}`,
+      accountApiUrl: `/api/me/group-orders/${encodeURIComponent(publicCode)}/${encodeURIComponent(groupMatch[2])}`,
       backUrl: `/groups/${publicCode}`,
       backText: "返回團購菜單",
       modeText: "團購個人訂單",
@@ -31,6 +35,7 @@ function pathValues() {
     return {
       mode: "store",
       apiUrl: `/api/stores/${publicSlug}/orders/${encodeURIComponent(storeMatch[2])}`,
+      accountApiUrl: `/api/me/store-orders/${publicSlug}/${encodeURIComponent(storeMatch[2])}`,
       backUrl: `/stores/${publicSlug}`,
       backText: "返回店家菜單",
       modeText: "店家個人訂單",
@@ -90,14 +95,24 @@ function renderOrder(order, values) {
 async function loadOrder() {
   const values = pathValues();
   const token = tokenFromFragment();
-  if (!values || !token) {
-    showError("缺少個人訂單查看資訊，請使用送單成功時取得的完整連結。");
+  currentValues = values;
+  currentOrderToken = token;
+  if (!values) {
+    showError("缺少個人訂單資訊，請從我的訂單或完整個人連結重新進入。");
     return;
   }
 
   try {
-    const response = await fetch(values.apiUrl, {
-      headers: { Authorization: `Bearer ${token}` },
+    const headers = token
+      ? { Authorization: `Bearer ${token}` }
+      : window.AppAuth?.getAuthorizationHeaders
+        ? await window.AppAuth.getAuthorizationHeaders()
+        : {};
+    if (!headers.Authorization) {
+      throw new Error("請先在首頁使用 Google 登入，再開啟我的訂單。");
+    }
+    const response = await fetch(token ? values.apiUrl : values.accountApiUrl, {
+      headers,
     });
     const result = await response.json();
     if (!response.ok) {
@@ -108,9 +123,39 @@ async function loadOrder() {
       );
     }
     renderOrder(result, values);
+    claimOrderButton.hidden = !token;
   } catch (error) {
     showError(error.message || "訂單暫時無法讀取，請稍後再試。");
   }
 }
+
+claimOrderButton.addEventListener("click", async () => {
+  if (!currentValues || !currentOrderToken) return;
+  claimOrderButton.disabled = true;
+  try {
+    const authHeaders = window.AppAuth?.getAuthorizationHeaders
+      ? await window.AppAuth.getAuthorizationHeaders()
+      : {};
+    if (!authHeaders.Authorization) {
+      throw new Error("請先在首頁使用 Google 登入，再保存這張訂單。");
+    }
+    const claimUrl = `${currentValues.accountApiUrl}/claim`;
+    const response = await fetch(claimUrl, {
+      method: "POST",
+      headers: { ...authHeaders, "X-Order-Token": currentOrderToken },
+    });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.detail || "訂單暫時無法保存。");
+    statusPanel.textContent = result.message;
+    statusPanel.dataset.state = "success";
+    statusPanel.hidden = false;
+    claimOrderButton.hidden = true;
+  } catch (error) {
+    statusPanel.textContent = error.message || "訂單暫時無法保存。";
+    statusPanel.dataset.state = "error";
+    statusPanel.hidden = false;
+    claimOrderButton.disabled = false;
+  }
+});
 
 loadOrder();

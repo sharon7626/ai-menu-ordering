@@ -8,6 +8,9 @@ from fastapi.responses import FileResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from backend.database import (
+    AccountClaimDeniedError,
+    AccountArchiveDeniedError,
+    SavedMenuAccessDeniedError,
     GroupClosedError,
     GroupManagementAccessDeniedError,
     GroupNotFoundError,
@@ -22,14 +25,32 @@ from backend.database import (
     get_public_group_menu,
     initialize_database,
     save_order,
+    upsert_app_user,
 )
 from backend.database_compat import DATABASE_ERROR_TYPES
+from backend.firebase_auth import (
+    FirebaseAuthenticationError,
+    FirebaseConfigurationError,
+    get_firebase_web_config,
+    verify_firebase_id_token,
+)
 from backend.group_orders import (
+    claim_group,
+    claim_group_order,
+    create_group_from_saved_menu,
     create_group_from_confirmation,
     create_group_order,
     close_group,
+    close_group_for_owner,
     get_group_management_data,
+    get_group_management_data_for_owner,
+    get_owned_groups,
+    get_group_order_for_user,
+    get_user_orders,
+    get_saved_menus,
     get_personal_group_order,
+    set_owned_group_archived,
+    set_user_order_archived,
 )
 from backend.group_order_excel import build_group_order_workbook, build_store_order_workbook
 from backend.menu_upload import (
@@ -47,12 +68,21 @@ from backend.menu_recognition import (
 )
 from backend.schemas import (
     AcceptedOrder,
+    AccountClaimResponse,
     AdminOrderListResponse,
+    FirebaseSessionResponse,
+    FirebaseWebConfigResponse,
     GroupCreateRequest,
     GroupCreateResponse,
     GroupOrderCreateRequest,
     GroupOrderCreateResponse,
     GroupManagementResponse,
+    MyGroupSummary,
+    MyGroupsResponse,
+    MyOrderSummary,
+    MyOrdersResponse,
+    SavedMenuSummary,
+    SavedMenusResponse,
     OrderCreateRequest,
     OrderCreateResponse,
     PersonalGroupOrderResponse,
@@ -72,7 +102,12 @@ from backend.stores import (
     update_store_from_confirmation,
 )
 from backend.store_qr import build_store_qr_svg
-from backend.store_orders import create_store_order, get_personal_store_order
+from backend.store_orders import (
+    claim_store_order,
+    create_store_order,
+    get_personal_store_order,
+    get_store_order_for_user,
+)
 
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -101,11 +136,454 @@ app.mount(
 app.mount("/data", StaticFiles(directory=DATA_DIRECTORY), name="data")
 
 
+def _verify_firebase_authorization(
+    authorization: str | None,
+    *,
+    required: bool,
+):
+    """驗證選填 Firebase Bearer Token；訪客沒有 Header 時維持原流程。"""
+    if not authorization:
+        if required:
+            raise HTTPException(status_code=401, detail="缺少登入憑證。")
+        return None
+    if not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="登入憑證格式錯誤。")
+    token = authorization.removeprefix("Bearer ").strip()
+    try:
+        return verify_firebase_id_token(token)
+    except FirebaseAuthenticationError as error:
+        raise HTTPException(status_code=401, detail="登入憑證無效或已過期。") from error
+    except FirebaseConfigurationError as error:
+        raise HTTPException(status_code=503, detail="登入服務尚未完成設定。") from error
+
+
+def _save_verified_user(user) -> int:
+    try:
+        return upsert_app_user(
+            firebase_uid=user.uid,
+            email=user.email,
+            display_name=user.display_name,
+        )
+    except DATABASE_ERROR_TYPES as error:
+        raise HTTPException(status_code=500, detail="登入資料暫時無法儲存。") from error
+
+
+def _resolve_optional_app_user_id(authorization: str | None) -> int | None:
+    user = _verify_firebase_authorization(authorization, required=False)
+    return _save_verified_user(user) if user is not None else None
+
+
+def _resolve_required_app_user_id(authorization: str | None) -> int:
+    user = _verify_firebase_authorization(authorization, required=True)
+    return _save_verified_user(user)
+
+
+@app.get("/api/auth/config", response_model=FirebaseWebConfigResponse)
+async def get_auth_config() -> FirebaseWebConfigResponse:
+    """只回傳 Firebase Web SDK 可公開使用的設定。"""
+    config = get_firebase_web_config()
+    if config is None:
+        return FirebaseWebConfigResponse(enabled=False)
+    return FirebaseWebConfigResponse(enabled=True, **config)
+
+
+@app.get("/api/auth/me", response_model=FirebaseSessionResponse)
+async def get_authenticated_user(
+    authorization: Annotated[str | None, Header()] = None,
+) -> FirebaseSessionResponse:
+    """驗證 Firebase ID Token，讓後端取得可信任的 Firebase UID。"""
+    user = _verify_firebase_authorization(authorization, required=True)
+    _save_verified_user(user)
+    return FirebaseSessionResponse(
+        uid=user.uid,
+        email=user.email,
+        display_name=user.display_name,
+    )
+
+
+@app.get("/api/me/groups", response_model=MyGroupsResponse)
+async def get_my_groups(
+    archived: bool = False,
+    authorization: Annotated[str | None, Header()] = None,
+) -> MyGroupsResponse:
+    user_id = _resolve_required_app_user_id(authorization)
+    groups = get_owned_groups(owner_user_id=user_id, archived=archived)
+    return MyGroupsResponse(
+        groups=[
+            MyGroupSummary(
+                **group,
+                public_url=f"/groups/{group['public_code']}",
+                management_url=f"/groups/{group['public_code']}/manage?account=1",
+                archive_api_url=f"/api/me/groups/{group['public_code']}",
+            )
+            for group in groups
+        ]
+    )
+
+
+@app.post("/api/me/groups/{public_code}/archive", response_model=AccountClaimResponse)
+async def archive_my_group(
+    public_code: str,
+    authorization: Annotated[str | None, Header()] = None,
+) -> AccountClaimResponse:
+    user_id = _resolve_required_app_user_id(authorization)
+    try:
+        set_owned_group_archived(
+            public_code=public_code.strip().upper(),
+            owner_user_id=user_id,
+            archived=True,
+        )
+    except AccountArchiveDeniedError as error:
+        raise HTTPException(status_code=403, detail="無法封存這個團購。") from error
+    return AccountClaimResponse(message="團購已封存。")
+
+
+@app.post("/api/me/groups/{public_code}/restore", response_model=AccountClaimResponse)
+async def restore_my_group(
+    public_code: str,
+    authorization: Annotated[str | None, Header()] = None,
+) -> AccountClaimResponse:
+    user_id = _resolve_required_app_user_id(authorization)
+    try:
+        set_owned_group_archived(
+            public_code=public_code.strip().upper(),
+            owner_user_id=user_id,
+            archived=False,
+        )
+    except AccountArchiveDeniedError as error:
+        raise HTTPException(status_code=403, detail="無法恢復這個團購。") from error
+    return AccountClaimResponse(message="團購已恢復。")
+
+
+@app.get(
+    "/api/me/groups/{public_code}/management",
+    response_model=GroupManagementResponse,
+)
+async def get_my_group_management(
+    public_code: str,
+    authorization: Annotated[str | None, Header()] = None,
+) -> GroupManagementResponse:
+    user_id = _resolve_required_app_user_id(authorization)
+    try:
+        group = get_group_management_data_for_owner(
+            public_code=public_code.strip().upper(),
+            owner_user_id=user_id,
+        )
+    except GroupManagementAccessDeniedError as error:
+        raise HTTPException(status_code=403, detail="無法開啟這個團購的管理資料。") from error
+    return GroupManagementResponse.model_validate(group)
+
+
+@app.get("/api/me/groups/{public_code}/management.xlsx")
+async def download_my_group_management_excel(
+    public_code: str,
+    authorization: Annotated[str | None, Header()] = None,
+) -> Response:
+    user_id = _resolve_required_app_user_id(authorization)
+    normalized_code = public_code.strip().upper()
+    try:
+        group = get_group_management_data_for_owner(
+            public_code=normalized_code,
+            owner_user_id=user_id,
+        )
+    except GroupManagementAccessDeniedError as error:
+        raise HTTPException(status_code=403, detail="無法下載這個團購的表格。") from error
+    workbook = build_group_order_workbook(group)
+    return Response(
+        content=workbook,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={
+            "Content-Disposition": f'attachment; filename="group-{normalized_code}-orders.xlsx"',
+            "Cache-Control": "no-store",
+            "Content-Length": str(len(workbook)),
+            "X-Order-Count": str(group["order_count"]),
+            "X-Grand-Total": str(group["grand_total"]),
+        },
+    )
+
+
+@app.post(
+    "/api/me/groups/{public_code}/close",
+    response_model=GroupManagementResponse,
+)
+async def close_my_group(
+    public_code: str,
+    authorization: Annotated[str | None, Header()] = None,
+) -> GroupManagementResponse:
+    user_id = _resolve_required_app_user_id(authorization)
+    try:
+        group = close_group_for_owner(
+            public_code=public_code.strip().upper(),
+            owner_user_id=user_id,
+        )
+    except GroupManagementAccessDeniedError as error:
+        raise HTTPException(status_code=403, detail="無法關閉這個團購。") from error
+    return GroupManagementResponse.model_validate(group)
+
+
+@app.get("/api/me/orders", response_model=MyOrdersResponse)
+async def get_my_orders(
+    archived: bool = False,
+    authorization: Annotated[str | None, Header()] = None,
+) -> MyOrdersResponse:
+    user_id = _resolve_required_app_user_id(authorization)
+    orders = get_user_orders(user_id=user_id, archived=archived)
+    summaries = []
+    for order in orders:
+        if order["mode"] == "group":
+            url = (
+                f"/groups/{order['public_code']}/orders/"
+                f"{order['public_order_number']}?account=1"
+            )
+            archive_api_url = (
+                f"/api/me/orders/group/{order['public_code']}/"
+                f"{order['public_order_number']}"
+            )
+        else:
+            url = (
+                f"/stores/{order['public_slug']}/orders/"
+                f"{order['public_order_number']}?account=1"
+            )
+            archive_api_url = (
+                f"/api/me/orders/store/{order['public_slug']}/"
+                f"{order['public_order_number']}"
+            )
+        summary_data = {
+            key: value
+            for key, value in order.items()
+            if key not in {"public_code", "public_slug"}
+        }
+        summaries.append(
+            MyOrderSummary(
+                **summary_data,
+                order_url=url,
+                archive_api_url=archive_api_url,
+            )
+        )
+    return MyOrdersResponse(orders=summaries)
+
+
+@app.post(
+    "/api/me/orders/{mode}/{parent_identifier}/{public_order_number}/archive",
+    response_model=AccountClaimResponse,
+)
+async def archive_my_order(
+    mode: str,
+    parent_identifier: str,
+    public_order_number: str,
+    authorization: Annotated[str | None, Header()] = None,
+) -> AccountClaimResponse:
+    user_id = _resolve_required_app_user_id(authorization)
+    normalized_parent = (
+        parent_identifier.strip().upper()
+        if mode == "group"
+        else parent_identifier.strip().lower()
+    )
+    try:
+        set_user_order_archived(
+            mode=mode,
+            parent_identifier=normalized_parent,
+            public_order_number=public_order_number.strip().upper(),
+            user_id=user_id,
+            archived=True,
+        )
+    except (AccountArchiveDeniedError, ValueError) as error:
+        raise HTTPException(status_code=403, detail="無法封存這張訂單。") from error
+    return AccountClaimResponse(message="訂單已封存。")
+
+
+@app.post(
+    "/api/me/orders/{mode}/{parent_identifier}/{public_order_number}/restore",
+    response_model=AccountClaimResponse,
+)
+async def restore_my_order(
+    mode: str,
+    parent_identifier: str,
+    public_order_number: str,
+    authorization: Annotated[str | None, Header()] = None,
+) -> AccountClaimResponse:
+    user_id = _resolve_required_app_user_id(authorization)
+    normalized_parent = (
+        parent_identifier.strip().upper()
+        if mode == "group"
+        else parent_identifier.strip().lower()
+    )
+    try:
+        set_user_order_archived(
+            mode=mode,
+            parent_identifier=normalized_parent,
+            public_order_number=public_order_number.strip().upper(),
+            user_id=user_id,
+            archived=False,
+        )
+    except (AccountArchiveDeniedError, ValueError) as error:
+        raise HTTPException(status_code=403, detail="無法恢復這張訂單。") from error
+    return AccountClaimResponse(message="訂單已恢復。")
+
+
+@app.get(
+    "/api/me/group-orders/{public_code}/{public_order_number}",
+    response_model=PersonalGroupOrderResponse,
+)
+async def get_my_group_order(
+    public_code: str,
+    public_order_number: str,
+    authorization: Annotated[str | None, Header()] = None,
+) -> PersonalGroupOrderResponse:
+    user_id = _resolve_required_app_user_id(authorization)
+    try:
+        order = get_group_order_for_user(
+            public_code=public_code.strip().upper(),
+            public_order_number=public_order_number.strip().upper(),
+            user_id=user_id,
+        )
+    except GroupOrderAccessDeniedError as error:
+        raise HTTPException(status_code=403, detail="無法查看這張訂單。") from error
+    return PersonalGroupOrderResponse.model_validate(order)
+
+
+@app.get(
+    "/api/me/store-orders/{public_slug}/{public_order_number}",
+    response_model=PersonalStoreOrderResponse,
+)
+async def get_my_store_order(
+    public_slug: str,
+    public_order_number: str,
+    authorization: Annotated[str | None, Header()] = None,
+) -> PersonalStoreOrderResponse:
+    user_id = _resolve_required_app_user_id(authorization)
+    try:
+        order = get_store_order_for_user(
+            public_slug=public_slug.strip().lower(),
+            public_order_number=public_order_number.strip().upper(),
+            user_id=user_id,
+        )
+    except StoreOrderAccessDeniedError as error:
+        raise HTTPException(status_code=403, detail="無法查看這張訂單。") from error
+    return PersonalStoreOrderResponse.model_validate(order)
+
+
+@app.post(
+    "/api/me/groups/{public_code}/claim",
+    response_model=AccountClaimResponse,
+)
+async def claim_my_group(
+    public_code: str,
+    authorization: Annotated[str | None, Header()] = None,
+    management_token: Annotated[
+        str | None, Header(alias="X-Management-Token")
+    ] = None,
+) -> AccountClaimResponse:
+    user_id = _resolve_required_app_user_id(authorization)
+    try:
+        claim_group(
+            public_code=public_code.strip().upper(),
+            management_token=management_token or "",
+            user_id=user_id,
+        )
+    except AccountClaimDeniedError as error:
+        raise HTTPException(status_code=403, detail="無法將這個團購保存到帳號。") from error
+    return AccountClaimResponse(message="團購已保存到我的團購。")
+
+
+@app.post(
+    "/api/me/group-orders/{public_code}/{public_order_number}/claim",
+    response_model=AccountClaimResponse,
+)
+async def claim_my_group_order(
+    public_code: str,
+    public_order_number: str,
+    authorization: Annotated[str | None, Header()] = None,
+    order_token: Annotated[str | None, Header(alias="X-Order-Token")] = None,
+) -> AccountClaimResponse:
+    user_id = _resolve_required_app_user_id(authorization)
+    try:
+        claim_group_order(
+            public_code=public_code.strip().upper(),
+            public_order_number=public_order_number.strip().upper(),
+            order_access_token=order_token or "",
+            user_id=user_id,
+        )
+    except AccountClaimDeniedError as error:
+        raise HTTPException(status_code=403, detail="無法將這張訂單保存到帳號。") from error
+    return AccountClaimResponse(message="訂單已保存到我的訂單。")
+
+
+@app.post(
+    "/api/me/store-orders/{public_slug}/{public_order_number}/claim",
+    response_model=AccountClaimResponse,
+)
+async def claim_my_store_order(
+    public_slug: str,
+    public_order_number: str,
+    authorization: Annotated[str | None, Header()] = None,
+    order_token: Annotated[str | None, Header(alias="X-Order-Token")] = None,
+) -> AccountClaimResponse:
+    user_id = _resolve_required_app_user_id(authorization)
+    try:
+        claim_store_order(
+            public_slug=public_slug.strip().lower(),
+            public_order_number=public_order_number.strip().upper(),
+            order_access_token=order_token or "",
+            user_id=user_id,
+        )
+    except AccountClaimDeniedError as error:
+        raise HTTPException(status_code=403, detail="無法將這張訂單保存到帳號。") from error
+    return AccountClaimResponse(message="訂單已保存到我的訂單。")
+
+
+@app.get("/api/me/menus", response_model=SavedMenusResponse)
+async def get_my_menus(
+    authorization: Annotated[str | None, Header()] = None,
+) -> SavedMenusResponse:
+    user_id = _resolve_required_app_user_id(authorization)
+    return SavedMenusResponse(
+        menus=[SavedMenuSummary(**menu) for menu in get_saved_menus(owner_user_id=user_id)]
+    )
+
+
+@app.post(
+    "/api/me/menus/{menu_id}/groups",
+    response_model=GroupCreateResponse,
+    status_code=201,
+)
+async def create_group_from_my_menu(
+    menu_id: int,
+    authorization: Annotated[str | None, Header()] = None,
+) -> GroupCreateResponse:
+    user_id = _resolve_required_app_user_id(authorization)
+    try:
+        created_group = create_group_from_saved_menu(
+            menu_id=menu_id,
+            owner_user_id=user_id,
+        )
+    except SavedMenuAccessDeniedError as error:
+        raise HTTPException(status_code=403, detail="無法使用這份菜單。") from error
+    public_code = created_group.public_code
+    return GroupCreateResponse(
+        success=True,
+        message="已從我的菜單建立新團購，請保存統籌管理連結。",
+        public_code=public_code,
+        participant_url=f"/groups/{public_code}",
+        management_url=f"/groups/{public_code}/manage#token={created_group.management_token}",
+        restaurant_name=created_group.menu["restaurant"]["name"],
+        category_count=len(created_group.menu["categories"]),
+        item_count=sum(len(category["items"]) for category in created_group.menu["categories"]),
+    )
+
+
 @app.post("/api/groups", response_model=GroupCreateResponse, status_code=201)
-async def create_group(confirmation: GroupCreateRequest) -> GroupCreateResponse:
+async def create_group(
+    confirmation: GroupCreateRequest,
+    authorization: Annotated[str | None, Header()] = None,
+) -> GroupCreateResponse:
     """將人工確認菜單保存為獨立團購，回傳一次性管理連結。"""
     try:
-        created_group = create_group_from_confirmation(confirmation)
+        owner_user_id = _resolve_optional_app_user_id(authorization)
+        created_group = create_group_from_confirmation(
+            confirmation,
+            owner_user_id=owner_user_id,
+        )
     except DATABASE_ERROR_TYPES as error:
         raise HTTPException(
             status_code=500,
@@ -199,11 +677,13 @@ async def get_store_qr(public_slug: str, request: Request) -> Response:
 async def submit_store_order(
     public_slug: str,
     order: StoreOrderCreateRequest,
+    authorization: Annotated[str | None, Header()] = None,
 ) -> StoreOrderCreateResponse:
     """依店家目前菜單核價並建立顧客的個人訂單。"""
     slug = public_slug.strip().lower()
     try:
-        created_order = create_store_order(slug, order)
+        user_id = _resolve_optional_app_user_id(authorization)
+        created_order = create_store_order(slug, order, user_id=user_id)
     except StoreNotFoundError as error:
         raise HTTPException(status_code=404, detail="找不到這家店，請確認網址是否正確") from error
     except StoreInactiveError as error:
@@ -366,6 +846,25 @@ async def get_group(public_code: str) -> PublicGroupResponse:
     return PublicGroupResponse.model_validate(group)
 
 
+@app.get("/api/groups/{public_code}/qr.svg", include_in_schema=False)
+async def get_group_qr(public_code: str, request: Request) -> Response:
+    """產生只包含參與者公開網址、不含管理權限的團購 QR Code。"""
+    normalized_code = public_code.strip().upper()
+    if get_public_group_menu(normalized_code) is None:
+        raise HTTPException(status_code=404, detail="找不到這個團購，請確認代碼是否正確")
+    origin = str(request.base_url).rstrip("/")
+    public_url = f"{origin}/groups/{normalized_code}"
+    try:
+        svg = build_store_qr_svg(public_url)
+    except ValueError as error:
+        raise HTTPException(status_code=422, detail="無法建立團購 QR Code") from error
+    return Response(
+        content=svg,
+        media_type="image/svg+xml",
+        headers={"Cache-Control": "public, max-age=300"},
+    )
+
+
 @app.post(
     "/api/groups/{public_code}/orders",
     response_model=GroupOrderCreateResponse,
@@ -374,11 +873,13 @@ async def get_group(public_code: str) -> PublicGroupResponse:
 async def submit_group_order(
     public_code: str,
     order: GroupOrderCreateRequest,
+    authorization: Annotated[str | None, Header()] = None,
 ) -> GroupOrderCreateResponse:
     """依團購菜單快照核價並建立參與者的個人訂單。"""
     normalized_code = public_code.strip().upper()
     try:
-        created_order = create_group_order(normalized_code, order)
+        user_id = _resolve_optional_app_user_id(authorization)
+        created_order = create_group_order(normalized_code, order, user_id=user_id)
     except GroupNotFoundError as error:
         raise HTTPException(
             status_code=404,
@@ -648,6 +1149,21 @@ async def show_upload_page(mode: str | None = None) -> RedirectResponse:
 async def show_group_join_page() -> FileResponse:
     """顯示可輸入團購代碼的公開入口。"""
     return FileResponse(FRONTEND_DIRECTORY / "group.html")
+
+
+@app.get("/me/groups", include_in_schema=False)
+async def show_my_groups_page() -> FileResponse:
+    return FileResponse(FRONTEND_DIRECTORY / "my-groups.html")
+
+
+@app.get("/me/orders", include_in_schema=False)
+async def show_my_orders_page() -> FileResponse:
+    return FileResponse(FRONTEND_DIRECTORY / "my-orders.html")
+
+
+@app.get("/me/menus", include_in_schema=False)
+async def show_my_menus_page() -> FileResponse:
+    return FileResponse(FRONTEND_DIRECTORY / "my-menus.html")
 
 
 @app.get("/groups/{public_code}", include_in_schema=False)

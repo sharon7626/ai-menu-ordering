@@ -77,9 +77,10 @@ C:\Users\sharo\anaconda3\python.exe -m uvicorn backend.main:app --reload
 - Build Command：`pip install -r requirements.txt`
 - Start Command：`uvicorn backend.main:app --host 0.0.0.0 --port $PORT --proxy-headers --forwarded-allow-ips '*'`
 - 正式資料庫：同區域 Render PostgreSQL 的 Internal Database URL。
-- 必要機密：`GEMINI_API_KEY` 與 `DATABASE_URL` 只能放在 Render Environment Variables。
+- 必要機密：`GEMINI_API_KEY`、`DATABASE_URL` 與 `FIREBASE_SERVICE_ACCOUNT_JSON` 只能放在 Render Environment Variables；Firebase Web App 設定也由環境變數提供，不寫入 Repository。
 
 完整設定與第一次正式驗收方式請見 [Render 部署指南](doc/render-deployment-guide.md)。
+第二版帳號與品牌功能發布前，請依 [Production 部署前清單](doc/production-deployment-checklist.md) 先備份正式資料，再逐步設定及驗收。
 
 ## 專案文件
 
@@ -93,6 +94,7 @@ C:\Users\sharo\anaconda3\python.exe -m uvicorn backend.main:app --reload
 - [開發待辦](doc/todo.md)
 - [專案記憶](doc/project-memory.md)
 - [Render 部署指南](doc/render-deployment-guide.md)
+- [Production 部署前清單](doc/production-deployment-checklist.md)
 
 ## 第一版不包含
 

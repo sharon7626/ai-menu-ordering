@@ -2,28 +2,68 @@
   position: sticky;
   top: 0;
   z-index: 50;
-  padding: 0.65rem 1rem;
-  border-bottom: 1px solid #ded4c8;
-  background: rgba(255, 253, 249, 0.97);
-  box-shadow: 0 0.2rem 0.8rem rgba(47, 41, 36, 0.08);
+  display: flex;
+  align-items: center;
+  min-height: 5.25rem;
+  padding-inline: max(var(--page-padding), calc((100% - var(--container)) / 2));
+  border-bottom: 1px solid var(--color-line);
+  background: color-mix(in srgb, var(--color-bg) 94%, transparent);
+  backdrop-filter: blur(0.6rem);
 }
 
-.top-home-nav a {
+.top-home-brand {
   display: inline-flex;
   align-items: center;
-  min-height: 2.5rem;
-  padding: 0.55rem 1rem;
-  border: 1px solid #315c4b;
-  border-radius: 0.6rem;
-  color: #315c4b;
-  background: #fff;
-  font-family: "Microsoft JhengHei", sans-serif;
-  font-weight: 900;
+  gap: 0.8rem;
+  min-height: 2.75rem;
+  color: var(--color-text);
   text-decoration: none;
 }
 
-.top-home-nav a:hover,
-.top-home-nav a:focus-visible {
-  color: #fff;
-  background: #315c4b;
+.top-home-brand-mark {
+  display: grid;
+  place-items: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  border: 1px solid var(--color-accent);
+  border-radius: 50%;
+  color: var(--color-text);
+  font-family: var(--font-serif);
+  font-size: 1rem;
+  transition: color var(--motion-fast), background var(--motion-fast), transform var(--motion-normal) var(--ease-standard);
+}
+
+.top-home-brand-name {
+  font-family: var(--font-serif);
+  font-size: 1.15rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  line-height: 1.2;
+}
+
+.top-home-brand-name small {
+  display: block;
+  margin-top: 0.15rem;
+  color: var(--color-muted);
+  font-family: var(--font-sans);
+  font-size: 0.58rem;
+  font-weight: 800;
+  letter-spacing: 0.18em;
+}
+
+.top-home-brand:hover .top-home-brand-mark,
+.top-home-brand:focus-visible .top-home-brand-mark {
+  color: var(--color-surface-raised);
+  background: var(--color-accent-strong);
+  transform: rotate(-5deg);
+}
+
+@media (max-width: 560px) {
+  .top-home-nav { min-height: 4.75rem; }
+  .top-home-brand-name small { display: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .top-home-nav { backdrop-filter: none; }
+  .top-home-brand-mark { transform: none; }
 }

@@ -9,12 +9,22 @@ from pathlib import Path
 
 from backend.database import (
     GroupManagementAccessDeniedError,
+    AccountClaimDeniedError,
+    SavedMenuAccessDeniedError,
     GroupOrderAccessDeniedError,
     get_group_order_for_access_check,
     get_group_management_data_for_access_check,
+    list_groups_for_owner,
+    list_orders_for_user,
+    list_saved_menus_for_owner,
+    get_saved_menu_for_owner,
     save_group_menu,
     save_group_order,
     mark_group_closed,
+    claim_group_for_user,
+    claim_order_for_user,
+    set_group_archive_for_owner,
+    set_order_archive_for_user,
 )
 from backend.database_compat import INTEGRITY_ERROR_TYPES
 from backend.schemas import GroupCreateRequest, GroupOrderCreateRequest
@@ -92,6 +102,7 @@ def confirmed_menu_to_snapshot(confirmation: GroupCreateRequest) -> dict:
 def create_group_from_confirmation(
     confirmation: GroupCreateRequest,
     database_path: Path | None = None,
+    owner_user_id: int | None = None,
 ) -> CreatedGroup:
     """產生公開代碼與私密 Token，並保存獨立團購菜單快照。"""
     menu = confirmed_menu_to_snapshot(confirmation)
@@ -106,6 +117,7 @@ def create_group_from_confirmation(
                 management_token_hash=hash_secret_token(management_token),
                 menu=menu,
                 created_at=datetime.now(timezone.utc),
+                owner_user_id=owner_user_id,
                 database_path=database_path,
             )
         except INTEGRITY_ERROR_TYPES:
@@ -118,10 +130,52 @@ def create_group_from_confirmation(
     raise sqlite3.IntegrityError("無法產生不重複的團購代碼")
 
 
+def create_group_from_saved_menu(
+    *,
+    menu_id: int,
+    owner_user_id: int,
+    database_path: Path | None = None,
+) -> CreatedGroup:
+    """從本人常用菜單建立新的獨立團購快照，不呼叫 Gemini。"""
+    menu = get_saved_menu_for_owner(
+        menu_id=menu_id,
+        owner_user_id=owner_user_id,
+        database_path=database_path,
+    )
+    if menu is None:
+        raise SavedMenuAccessDeniedError
+    for _ in range(MAX_CODE_GENERATION_ATTEMPTS):
+        public_code = "".join(secrets.choice(PUBLIC_CODE_ALPHABET) for _ in range(6))
+        management_token = secrets.token_urlsafe(32)
+        try:
+            save_group_menu(
+                public_code=public_code,
+                management_token_hash=hash_secret_token(management_token),
+                menu=menu,
+                created_at=datetime.now(timezone.utc),
+                owner_user_id=owner_user_id,
+                database_path=database_path,
+            )
+        except INTEGRITY_ERROR_TYPES:
+            continue
+        return CreatedGroup(public_code, management_token, menu)
+    raise sqlite3.IntegrityError("無法產生不重複的團購代碼")
+
+
+def get_saved_menus(
+    *, owner_user_id: int, database_path: Path | None = None
+) -> list[dict]:
+    return list_saved_menus_for_owner(
+        owner_user_id=owner_user_id,
+        database_path=database_path,
+    )
+
+
 def create_group_order(
     public_code: str,
     order: GroupOrderCreateRequest,
     database_path: Path | None = None,
+    user_id: int | None = None,
 ) -> CreatedGroupOrder:
     """建立團購個人訂單，原始查看 Token 只回傳給本次參與者。"""
     order_access_token = secrets.token_urlsafe(32)
@@ -132,6 +186,7 @@ def create_group_order(
         selections=[selection.model_dump() for selection in order.items],
         order_access_token_hash=hash_secret_token(order_access_token),
         created_at=created_at,
+        user_id=user_id,
         database_path=database_path,
     )
     return CreatedGroupOrder(
@@ -166,7 +221,64 @@ def get_personal_group_order(
         raise GroupOrderAccessDeniedError
 
     del order["order_access_token_hash"]
+    del order["user_id"]
     return order
+
+
+def get_group_order_for_user(
+    *,
+    public_code: str,
+    public_order_number: str,
+    user_id: int,
+    database_path: Path | None = None,
+) -> dict:
+    order = get_group_order_for_access_check(
+        public_code=public_code,
+        public_order_number=public_order_number,
+        database_path=database_path,
+    )
+    if order is None or order["user_id"] != user_id:
+        raise GroupOrderAccessDeniedError
+    del order["order_access_token_hash"]
+    del order["user_id"]
+    return order
+
+
+def claim_group(
+    *,
+    public_code: str,
+    management_token: str,
+    user_id: int,
+    database_path: Path | None = None,
+) -> None:
+    if not management_token:
+        raise AccountClaimDeniedError
+    claim_group_for_user(
+        public_code=public_code,
+        management_token_hash=hash_secret_token(management_token),
+        user_id=user_id,
+        database_path=database_path,
+    )
+
+
+def claim_group_order(
+    *,
+    public_code: str,
+    public_order_number: str,
+    order_access_token: str,
+    user_id: int,
+    database_path: Path | None = None,
+) -> None:
+    if not order_access_token:
+        raise AccountClaimDeniedError
+    claim_order_for_user(
+        mode="group",
+        parent_identifier=public_code,
+        public_order_number=public_order_number,
+        order_access_token_hash=hash_secret_token(order_access_token),
+        user_id=user_id,
+        database_path=database_path,
+    )
 
 
 def get_group_management_data(
@@ -189,6 +301,90 @@ def get_group_management_data(
         raise GroupManagementAccessDeniedError
 
     del group["management_token_hash"]
+    del group["owner_user_id"]
+    return _populate_group_management(group)
+
+
+def get_group_management_data_for_owner(
+    *,
+    public_code: str,
+    owner_user_id: int,
+    database_path: Path | None = None,
+) -> dict:
+    """以已驗證帳號擁有權取得團購管理資料。"""
+    group = get_group_management_data_for_access_check(
+        public_code=public_code,
+        database_path=database_path,
+    )
+    if group is None or group["owner_user_id"] != owner_user_id:
+        raise GroupManagementAccessDeniedError
+    del group["management_token_hash"]
+    del group["owner_user_id"]
+    return _populate_group_management(group)
+
+
+def get_owned_groups(
+    *,
+    owner_user_id: int,
+    archived: bool = False,
+    database_path: Path | None = None,
+) -> list[dict]:
+    return list_groups_for_owner(
+        owner_user_id=owner_user_id,
+        archived=archived,
+        database_path=database_path,
+    )
+
+
+def get_user_orders(
+    *,
+    user_id: int,
+    archived: bool = False,
+    database_path: Path | None = None,
+) -> list[dict]:
+    return list_orders_for_user(
+        user_id=user_id,
+        archived=archived,
+        database_path=database_path,
+    )
+
+
+def set_owned_group_archived(
+    *,
+    public_code: str,
+    owner_user_id: int,
+    archived: bool,
+    database_path: Path | None = None,
+) -> None:
+    set_group_archive_for_owner(
+        public_code=public_code,
+        owner_user_id=owner_user_id,
+        archived=archived,
+        database_path=database_path,
+    )
+
+
+def set_user_order_archived(
+    *,
+    mode: str,
+    parent_identifier: str,
+    public_order_number: str,
+    user_id: int,
+    archived: bool,
+    database_path: Path | None = None,
+) -> None:
+    set_order_archive_for_user(
+        mode=mode,
+        parent_identifier=parent_identifier,
+        public_order_number=public_order_number,
+        user_id=user_id,
+        archived=archived,
+        database_path=database_path,
+    )
+
+
+def _populate_group_management(group: dict) -> dict:
+    """共用 Token 與帳號授權後的團購彙整邏輯。"""
     summary_by_item: dict[str, dict[str, dict]] = {}
     for order in group["orders"]:
         for item in order["items"]:
@@ -284,5 +480,29 @@ def close_group(
     return get_group_management_data(
         public_code=public_code,
         management_token=management_token,
+        database_path=database_path,
+    )
+
+
+def close_group_for_owner(
+    *,
+    public_code: str,
+    owner_user_id: int,
+    database_path: Path | None = None,
+) -> dict:
+    """以已驗證帳號擁有權關閉團購。"""
+    get_group_management_data_for_owner(
+        public_code=public_code,
+        owner_user_id=owner_user_id,
+        database_path=database_path,
+    )
+    mark_group_closed(
+        public_code=public_code,
+        closed_at=datetime.now(timezone.utc),
+        database_path=database_path,
+    )
+    return get_group_management_data_for_owner(
+        public_code=public_code,
+        owner_user_id=owner_user_id,
         database_path=database_path,
     )

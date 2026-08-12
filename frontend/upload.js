@@ -14,6 +14,10 @@ const fileInput = document.querySelector("#menu-file");
 const fileSummary = document.querySelector("#file-summary");
 const fileName = document.querySelector("#file-name");
 const fileSize = document.querySelector("#file-size");
+const fileDropZone = document.querySelector("#file-drop-zone");
+const replaceFileButton = document.querySelector("#replace-file");
+const removeFileButton = document.querySelector("#remove-file");
+const processingSteps = document.querySelector("#processing-steps");
 const menuPreviewPanel = document.querySelector("#menu-preview-panel");
 const menuPreviewCanvas = document.querySelector("#menu-preview-canvas");
 const pdfPreview = document.querySelector("#pdf-preview");
@@ -46,6 +50,15 @@ const storeManagementLink = document.querySelector("#store-management-link");
 const storeUpdateLink = document.querySelector("#store-update-link");
 const scopeDescription = document.querySelector("#scope-description");
 const requestedMode = new URLSearchParams(window.location.search).get("mode");
+const uploadHeroArt = document.querySelector("[data-upload-ambient]");
+const uploadVisualMode = document.querySelector("#upload-visual-mode");
+const uploadVisualTitle = document.querySelector("#upload-visual-title");
+const uploadVisualWord = document.querySelector("#upload-visual-word");
+const uploadVisualStep1 = document.querySelector("#upload-visual-step-1");
+const uploadVisualStep2 = document.querySelector("#upload-visual-step-2");
+const uploadVisualStep3 = document.querySelector("#upload-visual-step-3");
+const uploadVisualStep4 = document.querySelector("#upload-visual-step-4");
+const uploadVisualNote = document.querySelector("#upload-visual-note");
 let isUploading = false;
 let isSavingMenu = false;
 let latestRecognition = null;
@@ -57,6 +70,15 @@ let cropStart = null;
 let croppedUploadFile = null;
 let appliedCrop = null;
 let isSelectingCrop = false;
+
+function setUploadVisual({ mode, title, word, steps, note }) {
+  uploadVisualMode.textContent = mode;
+  uploadVisualTitle.textContent = title;
+  uploadVisualWord.textContent = word;
+  [uploadVisualStep1, uploadVisualStep2, uploadVisualStep3, uploadVisualStep4]
+    .forEach((element, index) => { element.textContent = steps[index]; });
+  uploadVisualNote.textContent = note;
+}
 
 function getStoreUpdateContext() {
   const match = window.location.pathname.match(/^\/stores\/([a-z]{8})\/menu-update$/);
@@ -76,27 +98,65 @@ if (storeUpdateContext) {
   confirmButton.hidden = true;
   storeButton.textContent = "確認並更新固定菜單";
   scopeDescription.textContent = "重新上傳並確認後，只會更新這家店目前的固定菜單；固定網址與既有訂單內容不會改變。";
+  setUploadVisual({
+    mode: "SHOP MENU UPDATE",
+    title: "更新固定菜單",
+    word: "FIXED MENU",
+    steps: ["重新上傳並確認", "固定網址與 QR Code 不變", "顧客繼續掃碼點餐", "新訂單照常彙整"],
+    note: "UPDATE · SCAN · ORDER",
+  });
 } else {
   if (requestedMode === "group") {
     document.querySelector(".eyebrow").textContent = "一般團購｜主揪建立團購";
     document.querySelector("h1").textContent = "建立新團購";
     document.querySelector(".header-inner > p:last-child").textContent = "上傳這次要訂的菜單，AI 會自動讀取菜名與價格。";
-    document.title = "建立團購｜AI 菜單點餐系統";
+    document.title = "建立團購｜席間";
     storeButton.hidden = true;
     scopeDescription.textContent = "主揪上傳並確認菜單後，系統會產生參與連結與 6 碼代碼。一起點餐的人只要開啟連結或在首頁輸入代碼，不需要重新上傳菜單。";
+    setUploadVisual({
+      mode: "GROUP ORDER",
+      title: "這次一起點",
+      word: "GROUP MENU",
+      steps: ["上傳並確認菜單", "分享團購代碼", "大家各自點餐", "主揪查看彙整"],
+      note: "SHARE · ORDER · SUMMARY",
+    });
   } else if (requestedMode === "store") {
     document.querySelector(".eyebrow").textContent = "店家模式";
     document.querySelector("h1").textContent = "建立店家固定菜單";
-    document.title = "建立店家菜單｜AI 菜單點餐系統";
+    document.title = "建立店家菜單｜席間";
     confirmButton.hidden = true;
     scopeDescription.textContent = "確認菜單後會建立店家固定網址、QR Code 與私密管理連結，供店家長期使用。";
+    setUploadVisual({
+      mode: "SHOP ORDER",
+      title: "固定菜單上線",
+      word: "FIXED MENU",
+      steps: ["上傳並確認菜單", "取得固定網址與 QR Code", "顧客掃碼點餐", "店家查看訂單彙整"],
+      note: "SCAN · ORDER · SUMMARY",
+    });
   }
+}
+
+if (uploadHeroArt && matchMedia("(pointer: fine)").matches && !matchMedia("(prefers-reduced-motion: reduce)").matches) {
+  uploadHeroArt.addEventListener("pointermove", (event) => {
+    const bounds = uploadHeroArt.getBoundingClientRect();
+    uploadHeroArt.style.setProperty("--upload-x", `${((event.clientX - bounds.left) / bounds.width - 0.5) * 8}px`);
+    uploadHeroArt.style.setProperty("--upload-y", `${((event.clientY - bounds.top) / bounds.height - 0.5) * 8}px`);
+  });
+  uploadHeroArt.addEventListener("pointerleave", () => {
+    uploadHeroArt.style.removeProperty("--upload-x");
+    uploadHeroArt.style.removeProperty("--upload-y");
+  });
 }
 
 function showStatus(message, state) {
   uploadStatus.textContent = message;
   uploadStatus.dataset.state = state;
   uploadStatus.hidden = false;
+}
+
+function showProcessingStep(step) {
+  processingSteps.dataset.step = step;
+  processingSteps.hidden = false;
 }
 
 function formatFileSize(bytes) {
@@ -266,6 +326,7 @@ function updateSelection() {
     uploadStatus.hidden = true;
   }
   recognitionResult.hidden = true;
+  processingSteps.hidden = true;
   recognitionContent.replaceChildren();
   recognitionWarnings.replaceChildren();
   reviewStatus.hidden = true;
@@ -976,6 +1037,10 @@ reviewForm.addEventListener("submit", async (event) => {
     headers.Authorization = `Bearer ${storeUpdateContext.token}`;
   }
 
+  if (isGroupAction && window.AppAuth?.getAuthorizationHeaders) {
+    Object.assign(headers, await window.AppAuth.getAuthorizationHeaders());
+  }
+
   try {
     const response = await fetch(requestUrl, {
       method: requestMethod,
@@ -1047,6 +1112,37 @@ reviewForm.addEventListener("submit", async (event) => {
 
 fileInput.addEventListener("change", updateSelection);
 
+for (const eventName of ["dragenter", "dragover"]) {
+  fileDropZone.addEventListener(eventName, (event) => {
+    event.preventDefault();
+    fileDropZone.classList.add("is-dragover");
+    if (event.dataTransfer) event.dataTransfer.dropEffect = "copy";
+  });
+}
+
+for (const eventName of ["dragleave", "drop"]) {
+  fileDropZone.addEventListener(eventName, (event) => {
+    event.preventDefault();
+    fileDropZone.classList.remove("is-dragover");
+  });
+}
+
+fileDropZone.addEventListener("drop", (event) => {
+  const [file] = event.dataTransfer?.files ?? [];
+  if (!file) return;
+  const transfer = new DataTransfer();
+  transfer.items.add(file);
+  fileInput.files = transfer.files;
+  updateSelection();
+});
+
+replaceFileButton.addEventListener("click", () => fileInput.click());
+removeFileButton.addEventListener("click", () => {
+  fileInput.value = "";
+  updateSelection();
+  fileInput.focus();
+});
+
 copyGroupCode.addEventListener("click", async () => {
   const code = groupCode.textContent.trim();
   if (!code) return;
@@ -1076,6 +1172,7 @@ uploadForm.addEventListener("submit", async (event) => {
   uploadButton.disabled = true;
   uploadButton.textContent = "AI 辨識中…";
   showStatus("檔案檢查與 AI 辨識中，請稍候。", "loading");
+  showProcessingStep("reading");
   recognitionResult.hidden = true;
 
   const fileForRecognition = croppedUploadFile ?? file;
@@ -1087,6 +1184,8 @@ uploadForm.addEventListener("submit", async (event) => {
       method: "POST",
       body: formData,
     });
+    showProcessingStep("organizing");
+    await new Promise((resolve) => requestAnimationFrame(resolve));
     const result = await response.json();
 
     if (!response.ok) {
@@ -1099,6 +1198,7 @@ uploadForm.addEventListener("submit", async (event) => {
     }
 
     renderRecognition(result.recognition);
+    showProcessingStep("done");
     showStatus(
       croppedUploadFile
         ? `${file.name} 的框選區域辨識完成，請確認下方結果。`
@@ -1106,6 +1206,7 @@ uploadForm.addEventListener("submit", async (event) => {
       "success",
     );
   } catch (error) {
+    processingSteps.hidden = true;
     showStatus(error.message || "檔案上傳暫時失敗，請稍後再試一次。", "error");
   } finally {
     isUploading = false;
