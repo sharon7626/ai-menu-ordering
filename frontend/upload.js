@@ -78,6 +78,7 @@ let appliedCrop = null;
 let isSelectingCrop = false;
 let recognitionSource = "upload";
 let currentStoreRecognition = null;
+let currentStoreVersion = null;
 
 function setUploadVisual({ mode, title, word, steps, note }) {
   uploadVisualMode.textContent = mode;
@@ -89,7 +90,7 @@ function setUploadVisual({ mode, title, word, steps, note }) {
 }
 
 function getStoreUpdateContext() {
-  const match = window.location.pathname.match(/^\/stores\/([a-z]{8})\/menu-update$/);
+  const match = window.location.pathname.match(/^\/stores\/([a-z0-9-]+)\/menu-update\/?$/i);
   if (!match) {
     return null;
   }
@@ -103,6 +104,7 @@ const storeUpdateContext = getStoreUpdateContext();
 if (storeUpdateContext) {
   document.querySelector(".eyebrow").textContent = "店家管理";
   document.querySelector("h1").textContent = "更新固定菜單";
+  document.querySelector(".header-inner > p:last-child").textContent = "先查看目前菜單，再選擇直接修改或上傳全新菜單。";
   document.querySelector(".panel-heading p").textContent = "固定菜單更新";
   document.querySelector("#upload-title").textContent = "調整目前菜單或重新上傳";
   confirmButton.hidden = true;
@@ -177,6 +179,10 @@ function setStoreUpdateChoice(choice) {
 function showCurrentStoreMenu() {
   setStoreUpdateChoice("current");
   if (currentStoreRecognition) {
+    currentMenuStatus.textContent = currentStoreVersion
+      ? `已載入第 ${currentStoreVersion} 版固定菜單，可直接在下方修改。`
+      : "已載入目前固定菜單，可直接在下方修改。";
+    currentMenuStatus.dataset.state = "success";
     renderRecognition(cloneRecognition(currentStoreRecognition), "current");
   }
 }
@@ -203,8 +209,7 @@ async function loadCurrentStoreMenu() {
       throw new Error(typeof store.detail === "string" ? store.detail : "目前菜單載入失敗。");
     }
     currentStoreRecognition = publicMenuToRecognition(store);
-    currentMenuStatus.textContent = `已載入第 ${store.version} 版固定菜單，可直接在下方修改。`;
-    currentMenuStatus.dataset.state = "success";
+    currentStoreVersion = store.version;
     showCurrentStoreMenu();
   } catch (error) {
     currentMenuStatus.textContent = `${error.message || "目前菜單載入失敗。"}仍可改用上傳全新菜單。`;
@@ -1166,6 +1171,7 @@ reviewForm.addEventListener("submit", async (event) => {
           ...cloneRecognition(confirmedRecognition),
           warnings: [],
         };
+        currentStoreVersion = result.version;
       }
       const token = isStoreUpdate
         ? storeUpdateContext.token

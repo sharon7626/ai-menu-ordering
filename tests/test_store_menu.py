@@ -52,19 +52,34 @@ class StoreMenuTests(unittest.TestCase):
         upload_js = (project_root / "frontend" / "upload.js").read_text(
             encoding="utf-8"
         )
+        store_management_js = (
+            project_root / "frontend" / "store-management.js"
+        ).read_text(encoding="utf-8")
+        my_menus_js = (project_root / "frontend" / "my-menus.js").read_text(
+            encoding="utf-8"
+        )
 
         self.assertIn('id="edit-current-menu"', upload_html)
         self.assertIn('id="upload-new-menu"', upload_html)
         self.assertIn("直接修改目前菜單", upload_html)
         self.assertIn("上傳全新菜單", upload_html)
+        self.assertIn('href="/frontend/upload.css?v=20260812-2"', upload_html)
+        self.assertIn('src="/frontend/menu-variants.js?v=20260808-1"', upload_html)
+        self.assertIn('src="/frontend/upload.js?v=20260812-2"', upload_html)
+        self.assertNotIn('href="./upload.css', upload_html)
+        self.assertNotIn('src="./upload.js', upload_html)
         self.assertIn("function publicMenuToRecognition", upload_js)
         self.assertIn("function loadCurrentStoreMenu", upload_js)
+        self.assertIn("([a-z0-9-]+)\\/menu-update\\/?$", upload_js)
         self.assertIn(
             "fetch(`/api/stores/${encodeURIComponent(storeUpdateContext.publicSlug)}`)",
             upload_js,
         )
         self.assertIn('renderRecognition(cloneRecognition(currentStoreRecognition), "current")', upload_js)
         self.assertIn('renderRecognition(result.recognition, "upload")', upload_js)
+        self.assertIn("/stores/${publicSlug}/menu-update#token=${token}", upload_js)
+        self.assertIn("/stores/${store.public_slug}/menu-update", store_management_js)
+        self.assertIn("/stores/${menu.public_slug}/menu-update", my_menus_js)
 
     def test_create_update_public_menu_and_preserve_old_order_snapshot(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
