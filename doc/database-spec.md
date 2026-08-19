@@ -42,6 +42,7 @@ erDiagram
 | `customer_name` | TEXT | 必填、去除空白後不可為空 | 顧客姓名。 |
 | `guest_contact_method` | TEXT | 選填，僅允許 `phone` 或 `email` | 未登入訪客的聯絡方式類型；登入訂單及舊訂單為 `NULL`。 |
 | `guest_contact_value` | TEXT | 選填，必須與類型成對 | 正規化後的訪客手機或 Email；只供私人管理與 Excel 使用。 |
+| `guest_edit_code_hash` | TEXT | 選填、固定長度雜湊 | 團購訪客 6 碼訂單修改碼的 SHA-256 雜湊；登入、店家及歷史訂單可為 `NULL`。原始修改碼不得保存或寫入 log。 |
 | `total_amount` | INTEGER | 必填、大於或等於 0 | 訂單總金額，單位為新臺幣元。 |
 | `created_at` | TEXT | 必填 | 使用包含時區的 ISO 8601 文字保存建立時間。 |
 
@@ -97,6 +98,8 @@ sqlite:///./app.db
 團購重複身分沿用既有 `orders.user_id` 或訪客 `guest_contact_method`＋`guest_contact_value` 查找，不新增資料表或修改 schema。第一次建立、後續加購／修改及團購流水號都在同一資料庫交易內進行；PostgreSQL 鎖定團購列，SQLite 使用 `BEGIN IMMEDIATE`，避免同時請求各自建立新編號。
 
 加購／修改會更新既有 `orders` 主列、刪除後重建該張訂單的 `order_items`，不新增另一張訂單，也不增加 `next_order_sequence`。既有歷史重複資料不自動合併或刪除；新規則只約束更新後的新送單。店家訂單不套用此長期唯一規則。
+
+訪客跨裝置更新另使用可為 `NULL` 的 `orders.guest_edit_code_hash`。新訪客團購訂單保存使用者自設 6 碼的不可逆雜湊；正確聯絡方式與修改碼雜湊相符時才可讀取及更新。Additive migration 只新增欄位，既有列保持 `NULL`，不改寫歷史訂單或推測修改碼。
 
 ## 8. 本階段限制
 

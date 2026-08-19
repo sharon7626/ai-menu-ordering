@@ -54,6 +54,7 @@ class PersonalGroupOrderTests(unittest.TestCase):
                         "customer_name": "小美",
                         "contact_method": "email",
                         "contact_value": "xiaomei@example.com",
+                        "edit_code": "246810",
                         "items": [{"item_id": "item-a-a", "quantity": 2}],
                     },
                 )

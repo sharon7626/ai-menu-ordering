@@ -47,11 +47,18 @@ def group_payload(
         "customer_name": name,
         "contact_method": "phone",
         "contact_value": contact_value,
+        "edit_code": "246810",
         "website": website,
         "items": [{"item_id": "item-a-a", "quantity": 1, "note": note}],
     }
     if repeat_action is not None:
         payload["repeat_action"] = repeat_action
+    return payload
+
+
+def store_payload(**kwargs) -> dict:
+    payload = group_payload(**kwargs)
+    payload.pop("edit_code", None)
     return payload
 
 
@@ -155,8 +162,8 @@ class OrderAbuseProtectionTests(unittest.TestCase):
             with TestClient(app) as client:
                 store = client.post("/api/stores", json=store_confirmation()).json()
                 endpoint = f"/api/stores/{store['public_slug']}/orders"
-                first = client.post(endpoint, json=group_payload())
-                duplicate = client.post(endpoint, json=group_payload())
+                first = client.post(endpoint, json=store_payload())
+                duplicate = client.post(endpoint, json=store_payload())
 
         self.assertEqual(first.status_code, 201)
         self.assertEqual(duplicate.status_code, 409)
@@ -170,13 +177,13 @@ class OrderAbuseProtectionTests(unittest.TestCase):
                 accepted = [
                     client.post(
                         endpoint,
-                        json=group_payload(name=f"店家顧客{i}", note=f"第{i}筆"),
+                        json=store_payload(name=f"店家顧客{i}", note=f"第{i}筆"),
                     )
                     for i in range(5)
                 ]
                 limited = client.post(
                     endpoint,
-                    json=group_payload(name="第六位顧客", note="第六筆"),
+                    json=store_payload(name="第六位顧客", note="第六筆"),
                 )
 
         self.assertTrue(all(response.status_code == 201 for response in accepted))
@@ -189,7 +196,7 @@ class OrderAbuseProtectionTests(unittest.TestCase):
                 store = client.post("/api/stores", json=store_confirmation()).json()
                 response = client.post(
                     f"/api/stores/{store['public_slug']}/orders",
-                    json=group_payload(website="bot-filled-this-field"),
+                    json=store_payload(website="bot-filled-this-field"),
                 )
 
         self.assertEqual(response.status_code, 422)

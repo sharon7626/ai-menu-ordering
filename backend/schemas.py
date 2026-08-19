@@ -257,6 +257,7 @@ class GroupOrderCreateRequest(BaseModel):
     customer_name: str = Field(max_length=50)
     contact_method: Literal["phone", "email"] | None = None
     contact_value: str | None = Field(default=None, max_length=254)
+    edit_code: str | None = Field(default=None, pattern=r"^\d{6}$")
     website: str = Field(default="", max_length=200)
     repeat_action: Literal["add", "replace"] | None = None
     items: list[GroupOrderSelection] = Field(min_length=1)
@@ -317,6 +318,42 @@ class GroupOrderCreateResponse(BaseModel):
     customer_name: str
     total_amount: int = Field(ge=0)
     created_at: datetime
+    items: list[OrderItem]
+
+
+class GroupOrderRecoveryRequest(BaseModel):
+    """訪客以聯絡方式與六碼修改碼找回同一團購中的原訂單。"""
+
+    model_config = ConfigDict(extra="forbid")
+
+    contact_method: Literal["phone", "email"]
+    contact_value: str = Field(max_length=254)
+    edit_code: str = Field(pattern=r"^\d{6}$")
+
+    @model_validator(mode="after")
+    def normalize_contact(self) -> Self:
+        cleaned_value = self.contact_value.strip()
+        if self.contact_method == "phone":
+            compact_phone = re.sub(r"[\s()-]", "", cleaned_value)
+            if compact_phone.startswith("+8869") and len(compact_phone) == 13:
+                compact_phone = f"0{compact_phone[4:]}"
+            if not re.fullmatch(r"09\d{8}", compact_phone):
+                raise ValueError("請輸入正確的台灣手機號碼，例如 0912345678")
+            self.contact_value = compact_phone
+        else:
+            normalized_email = cleaned_value.lower()
+            if not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", normalized_email):
+                raise ValueError("請輸入正確的 Email，例如 name@example.com")
+            self.contact_value = normalized_email
+        return self
+
+
+class GroupOrderRecoveryResponse(BaseModel):
+    """修改碼驗證成功後回傳可重新放入購物車的原訂單。"""
+
+    public_order_number: str
+    customer_name: str
+    total_amount: int = Field(ge=0)
     items: list[OrderItem]
 
 
@@ -460,6 +497,7 @@ class StoreOrderCreateRequest(GroupOrderCreateRequest):
     """店家顧客送出的最小訂單資料，價格由後端取得。"""
 
     repeat_action: None = None
+    edit_code: None = None
 
 
 class StoreOrderCreateResponse(BaseModel):

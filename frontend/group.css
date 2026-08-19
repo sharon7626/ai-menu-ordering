@@ -345,7 +345,8 @@ button {
 
 #customer-name,
 #contact-value,
-#contact-method {
+#contact-method,
+#edit-code {
   width: 100%;
   min-height: 2.8rem;
   padding: 0.65rem 0.75rem;
@@ -388,6 +389,13 @@ button {
 .guest-identity-fields small {
   color: #6d6259;
   line-height: 1.5;
+}
+
+.recover-order-button {
+  margin-top: 0.25rem;
+  color: #315c4b;
+  background: transparent;
+  border: 1px solid #315c4b;
 }
 
 .order-honeypot {

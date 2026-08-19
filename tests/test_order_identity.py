@@ -53,7 +53,11 @@ class OrderIdentityTests(unittest.TestCase):
                 )
                 created = client.post(
                     f"/api/groups/{code}/orders",
-                    json=order(contact_method="phone", contact_value="0912-345-678"),
+                    json=order(
+                        contact_method="phone",
+                        contact_value="0912-345-678",
+                        edit_code="246810",
+                    ),
                 )
                 management = client.get(
                     f"/api/groups/{code}/management",

@@ -12,6 +12,8 @@ from backend.database import (
     AccountClaimDeniedError,
     SavedMenuAccessDeniedError,
     GroupOrderAccessDeniedError,
+    GroupOrderEditCodeDeniedError,
+    get_guest_group_order_for_recovery,
     get_group_order_for_access_check,
     get_group_management_data_for_access_check,
     list_groups_for_owner,
@@ -27,7 +29,7 @@ from backend.database import (
     set_order_archive_for_user,
 )
 from backend.database_compat import INTEGRITY_ERROR_TYPES
-from backend.schemas import GroupCreateRequest, GroupOrderCreateRequest
+from backend.schemas import GroupCreateRequest, GroupOrderCreateRequest, GroupOrderRecoveryRequest
 
 
 PUBLIC_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
@@ -192,6 +194,11 @@ def create_group_order(
         user_id=user_id,
         guest_contact_method=order.contact_method if user_id is None else None,
         guest_contact_value=order.contact_value if user_id is None else None,
+        guest_edit_code_hash=(
+            hash_secret_token(order.edit_code)
+            if user_id is None and order.edit_code
+            else None
+        ),
         repeat_action=order.repeat_action,
         existing_order_number=existing_order_number,
         existing_order_access_token_hash=(
@@ -210,6 +217,27 @@ def create_group_order(
         items=saved_order["items"],
         was_updated=saved_order["was_updated"],
     )
+
+
+def recover_guest_group_order(
+    public_code: str,
+    recovery: GroupOrderRecoveryRequest,
+    database_path: Path | None = None,
+) -> dict:
+    """以聯絡方式與修改碼驗證訪客身分，成功才回傳原訂單內容。"""
+    order = get_guest_group_order_for_recovery(
+        public_code=public_code,
+        guest_contact_method=recovery.contact_method,
+        guest_contact_value=recovery.contact_value,
+        database_path=database_path,
+    )
+    if order is None or not order["guest_edit_code_hash"]:
+        raise GroupOrderEditCodeDeniedError
+    received_hash = hash_secret_token(recovery.edit_code)
+    if not hmac.compare_digest(order["guest_edit_code_hash"], received_hash):
+        raise GroupOrderEditCodeDeniedError
+    del order["guest_edit_code_hash"]
+    return order
 
 
 def get_personal_group_order(

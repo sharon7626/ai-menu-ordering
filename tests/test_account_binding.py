@@ -104,7 +104,7 @@ class AccountBindingTests(unittest.TestCase):
                 code = group.json()["public_code"]
                 order = client.post(
                     f"/api/groups/{code}/orders",
-                    json=order_payload("訪客"),
+                    json={**order_payload("訪客"), "edit_code": "246810"},
                 )
 
         self.assertEqual(group.status_code, 201)

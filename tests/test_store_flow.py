@@ -154,6 +154,7 @@ class CompleteStoreAndDualModeFlowTests(unittest.TestCase):
                                 "customer_name": "團購顧客",
                                 "contact_method": "phone",
                                 "contact_value": "0912345678",
+                                "edit_code": "246810",
                                 "items": [{"item_id": chicken_id, "quantity": 1}],
                             },
                         )

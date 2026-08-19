@@ -20,6 +20,7 @@ from typing import Iterator, Sequence
 RATE_LIMIT_MAX_ORDERS = 5
 RATE_LIMIT_WINDOW_SECONDS = 10 * 60
 DUPLICATE_WINDOW_SECONDS = 30
+EDIT_CODE_MAX_FAILURES = 5
 
 
 class DuplicateOrderSubmissionError(Exception):
@@ -59,12 +60,14 @@ class OrderAbuseGuard:
         self._lock = threading.Lock()
         self._rate_events: dict[str, deque[float]] = {}
         self._duplicate_events: dict[str, float] = {}
+        self._edit_code_failures: dict[str, deque[float]] = {}
 
     def reset(self) -> None:
         """清除記憶體狀態；供服務啟動與隔離測試使用。"""
         with self._lock:
             self._rate_events.clear()
             self._duplicate_events.clear()
+            self._edit_code_failures.clear()
 
     def _cleanup(self, now: float) -> None:
         rate_cutoff = now - RATE_LIMIT_WINDOW_SECONDS
@@ -85,6 +88,38 @@ class OrderAbuseGuard:
         ]
         for key in expired_duplicates:
             self._duplicate_events.pop(key, None)
+
+        empty_edit_keys: list[str] = []
+        for key, timestamps in self._edit_code_failures.items():
+            while timestamps and timestamps[0] <= rate_cutoff:
+                timestamps.popleft()
+            if not timestamps:
+                empty_edit_keys.append(key)
+        for key in empty_edit_keys:
+            self._edit_code_failures.pop(key, None)
+
+    def record_edit_code_failure(
+        self, *, scope: str, source_ip: str, identity: str
+    ) -> None:
+        """記錄不可逆識別的一次修改碼失敗，達上限時暫時封鎖。"""
+        now = time.monotonic()
+        key = _digest("edit-code", scope, source_ip, identity)
+        with self._lock:
+            self._cleanup(now)
+            timestamps = self._edit_code_failures.setdefault(key, deque())
+            timestamps.append(now)
+            if len(timestamps) >= EDIT_CODE_MAX_FAILURES:
+                retry_after = math.ceil(
+                    RATE_LIMIT_WINDOW_SECONDS - (now - timestamps[0])
+                )
+                raise OrderRateLimitExceededError(retry_after)
+
+    def clear_edit_code_failures(
+        self, *, scope: str, source_ip: str, identity: str
+    ) -> None:
+        key = _digest("edit-code", scope, source_ip, identity)
+        with self._lock:
+            self._edit_code_failures.pop(key, None)
 
     def reserve(
         self,
@@ -169,3 +204,15 @@ def protect_order_submission(
 
 def reset_order_abuse_guard() -> None:
     ORDER_ABUSE_GUARD.reset()
+
+
+def record_edit_code_failure(*, scope: str, source_ip: str, identity: str) -> None:
+    ORDER_ABUSE_GUARD.record_edit_code_failure(
+        scope=scope, source_ip=source_ip, identity=identity
+    )
+
+
+def clear_edit_code_failures(*, scope: str, source_ip: str, identity: str) -> None:
+    ORDER_ABUSE_GUARD.clear_edit_code_failures(
+        scope=scope, source_ip=source_ip, identity=identity
+    )

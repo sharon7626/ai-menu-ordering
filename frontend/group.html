@@ -96,6 +96,24 @@
                     placeholder="例如：0912345678"
                   >
                   <small>僅供統籌辨識訂購者，不會顯示在公開菜單。</small>
+                  <label for="edit-code">6 碼訂單修改碼</label>
+                  <input
+                    id="edit-code"
+                    name="edit-code"
+                    type="password"
+                    inputmode="numeric"
+                    autocomplete="off"
+                    minlength="6"
+                    maxlength="6"
+                    pattern="[0-9]{6}"
+                    placeholder="請設定 6 碼數字"
+                  >
+                  <small>
+                    第一次送單請自行設定；之後換手機或瀏覽器時，可用同一聯絡方式與修改碼找回原訂單。
+                  </small>
+                  <button id="recover-order" class="recover-order-button" type="button">
+                    載入並修改原訂單
+                  </button>
                 </div>
               </div>
               <label class="order-honeypot" aria-hidden="true">

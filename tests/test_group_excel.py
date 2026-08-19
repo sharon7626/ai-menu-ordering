@@ -61,6 +61,7 @@ class GroupExcelTests(unittest.TestCase):
                             "customer_name": customer,
                             "contact_method": "phone",
                             "contact_value": contact_value,
+                            "edit_code": "246810",
                             "items": [{"item_id": "black-tea", "quantity": quantity, "note": note}],
                         },
                     )

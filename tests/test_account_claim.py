@@ -49,7 +49,8 @@ class AccountClaimTests(unittest.TestCase):
                 group = client.post("/api/groups", json=MENU).json()
                 store = client.post("/api/stores", json=MENU).json()
                 group_order = client.post(
-                    f"/api/groups/{group['public_code']}/orders", json=ORDER
+                    f"/api/groups/{group['public_code']}/orders",
+                    json={**ORDER, "edit_code": "246810"},
                 ).json()
                 store_order = client.post(
                     f"/api/stores/{store['public_slug']}/orders", json=ORDER

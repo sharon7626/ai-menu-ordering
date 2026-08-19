@@ -60,6 +60,7 @@ class GroupManagementTests(unittest.TestCase):
                             "customer_name": name,
                             "contact_method": "phone",
                             "contact_value": contact_value,
+                            "edit_code": "246810",
                             "items": [
                                 {
                                     "item_id": "item-a-a",

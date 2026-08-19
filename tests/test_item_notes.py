@@ -62,6 +62,7 @@ class ItemNoteTests(unittest.TestCase):
                         "customer_name": "小美",
                         "contact_method": "phone",
                         "contact_value": "0912345678",
+                        "edit_code": "246810",
                         "items": [
                             {
                                 "item_id": "item-a-a",
@@ -150,6 +151,7 @@ class ItemNoteTests(unittest.TestCase):
                         "customer_name": "小美",
                         "contact_method": "phone",
                         "contact_value": "0912345678",
+                        "edit_code": "246810",
                         "items": [
                             {"item_id": "item-a-a", "quantity": 1, "note": "字" * 201}
                         ],

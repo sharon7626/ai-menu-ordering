@@ -110,6 +110,7 @@ POSTGRES_SCHEMA_STATEMENTS = (
         customer_name TEXT NOT NULL CHECK (char_length(trim(customer_name)) > 0),
         guest_contact_method TEXT CHECK (guest_contact_method IN ('phone', 'email')),
         guest_contact_value TEXT,
+        guest_edit_code_hash TEXT,
         total_amount INTEGER NOT NULL CHECK (total_amount >= 0),
         created_at TEXT NOT NULL,
         archived_at TEXT,
@@ -136,6 +137,7 @@ POSTGRES_SCHEMA_STATEMENTS = (
     "ALTER TABLE orders ADD COLUMN IF NOT EXISTS archived_at TEXT",
     "ALTER TABLE orders ADD COLUMN IF NOT EXISTS guest_contact_method TEXT",
     "ALTER TABLE orders ADD COLUMN IF NOT EXISTS guest_contact_value TEXT",
+    "ALTER TABLE orders ADD COLUMN IF NOT EXISTS guest_edit_code_hash TEXT",
     """
     CREATE TABLE IF NOT EXISTS order_items (
         id BIGSERIAL PRIMARY KEY,
@@ -263,6 +265,7 @@ CREATE TABLE IF NOT EXISTS orders (
     customer_name TEXT NOT NULL CHECK (length(trim(customer_name)) > 0),
     guest_contact_method TEXT CHECK (guest_contact_method IN ('phone', 'email')),
     guest_contact_value TEXT,
+    guest_edit_code_hash TEXT,
     total_amount INTEGER NOT NULL CHECK (total_amount >= 0),
     created_at TEXT NOT NULL,
     archived_at TEXT,
@@ -377,6 +380,10 @@ class GroupOrderAccessDeniedError(ValueError):
     """個人訂單不存在或查看 Token 不正確。"""
 
 
+class GroupOrderEditCodeDeniedError(ValueError):
+    """訪客訂單不存在、沒有修改碼或修改碼不正確。"""
+
+
 class GroupManagementAccessDeniedError(ValueError):
     """團購不存在或統籌管理 Token 不正確。"""
 
@@ -471,6 +478,7 @@ def initialize_database(database_path: Path | None = None) -> Path | str:
         _add_missing_store_owner_column(connection)
         _add_missing_archive_columns(connection)
         _add_missing_guest_contact_columns(connection)
+        _add_missing_guest_edit_code_column(connection)
         connection.executescript(GROUP_INDEX_SQL)
         connection.commit()
     finally:
@@ -564,6 +572,15 @@ def _add_missing_guest_contact_columns(connection: sqlite3.Connection) -> None:
         connection.execute("ALTER TABLE orders ADD COLUMN guest_contact_method TEXT")
     if "guest_contact_value" not in order_columns:
         connection.execute("ALTER TABLE orders ADD COLUMN guest_contact_value TEXT")
+
+
+def _add_missing_guest_edit_code_column(connection: sqlite3.Connection) -> None:
+    """新增訪客訂單修改碼雜湊；既有訂單保持空值且不產生假修改碼。"""
+    order_columns = {
+        row["name"] for row in connection.execute("PRAGMA table_info(orders)")
+    }
+    if "guest_edit_code_hash" not in order_columns:
+        connection.execute("ALTER TABLE orders ADD COLUMN guest_edit_code_hash TEXT")
 
 
 def upsert_app_user(
@@ -1160,6 +1177,7 @@ def save_group_order(
     user_id: int | None = None,
     guest_contact_method: str | None = None,
     guest_contact_value: str | None = None,
+    guest_edit_code_hash: str | None = None,
     repeat_action: str | None = None,
     existing_order_number: str | None = None,
     existing_order_access_token_hash: str | None = None,
@@ -1225,6 +1243,7 @@ def save_group_order(
             existing_order = connection.execute(
                 """
                 SELECT id, public_order_number, order_access_token_hash,
+                       guest_edit_code_hash,
                        customer_name, total_amount, created_at
                 FROM orders
                 WHERE group_session_id = ? AND user_id = ?
@@ -1237,6 +1256,7 @@ def save_group_order(
             existing_order = connection.execute(
                 """
                 SELECT id, public_order_number, order_access_token_hash,
+                       guest_edit_code_hash,
                        customer_name, total_amount, created_at
                 FROM orders
                 WHERE group_session_id = ?
@@ -1257,7 +1277,14 @@ def save_group_order(
                     existing_order_access_token_hash,
                 )
             )
-            can_update = user_id is not None or token_matches
+            edit_code_matches = bool(
+                guest_edit_code_hash
+                and existing_order["guest_edit_code_hash"]
+                and hmac.compare_digest(
+                    existing_order["guest_edit_code_hash"], guest_edit_code_hash
+                )
+            )
+            can_update = user_id is not None or token_matches or edit_code_matches
             if repeat_action is None:
                 raise GroupOrderAlreadyExistsError(
                     existing_order["public_order_number"], can_update
@@ -1270,6 +1297,8 @@ def save_group_order(
                     != existing_order["public_order_number"]
                 )
             ):
+                if user_id is None and guest_edit_code_hash:
+                    raise GroupOrderEditCodeDeniedError
                 raise GroupOrderAccessDeniedError
 
             if repeat_action == "add":
@@ -1359,6 +1388,9 @@ def save_group_order(
                 "was_updated": True,
             }
 
+        if user_id is None and not guest_edit_code_hash:
+            raise GroupOrderValidationError("未登入時，請設定 6 碼訂單修改碼")
+
         sequence = group_row["next_order_sequence"]
         public_order_number = f"{public_code}-{sequence:03d}"
         total_amount = sum(item["subtotal"] for item in stored_items)
@@ -1381,10 +1413,11 @@ def save_group_order(
                 customer_name,
                 guest_contact_method,
                 guest_contact_value,
+                guest_edit_code_hash,
                 total_amount,
                 created_at
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 group_row["id"],
@@ -1394,6 +1427,7 @@ def save_group_order(
                 customer_name,
                 guest_contact_method,
                 guest_contact_value,
+                guest_edit_code_hash,
                 total_amount,
                 created_at.isoformat(),
             ),
@@ -1496,6 +1530,82 @@ def get_group_order_for_access_check(
         "customer_name": first["customer_name"],
         "total_amount": first["total_amount"],
         "created_at": first["created_at"],
+        "items": [
+            {
+                "item_id": row["item_id"],
+                "item_name": row["item_name"],
+                "unit_price": row["unit_price"],
+                "quantity": row["quantity"],
+                "note": row["note"],
+                "subtotal": row["subtotal"],
+            }
+            for row in rows
+            if row["item_id"] is not None
+        ],
+    }
+
+
+def get_guest_group_order_for_recovery(
+    *,
+    public_code: str,
+    guest_contact_method: str,
+    guest_contact_value: str,
+    database_path: Path | None = None,
+) -> dict | None:
+    """依團購與正規化聯絡方式取得訪客訂單，僅供後端修改碼驗證。"""
+    connection = connect_database(database_path)
+    try:
+        rows = connection.execute(
+            """
+            SELECT
+                orders.public_order_number,
+                orders.guest_edit_code_hash,
+                orders.customer_name,
+                orders.total_amount,
+                order_items.item_id,
+                order_items.item_name,
+                order_items.unit_price,
+                order_items.quantity,
+                order_items.note,
+                order_items.subtotal
+            FROM orders
+            JOIN group_sessions ON group_sessions.id = orders.group_session_id
+            LEFT JOIN order_items ON order_items.order_id = orders.id
+            WHERE group_sessions.public_code = ?
+              AND orders.user_id IS NULL
+              AND orders.guest_contact_method = ?
+              AND orders.guest_contact_value = ?
+              AND orders.id = (
+                  SELECT latest_orders.id
+                  FROM orders AS latest_orders
+                  WHERE latest_orders.group_session_id = group_sessions.id
+                    AND latest_orders.user_id IS NULL
+                    AND latest_orders.guest_contact_method = ?
+                    AND latest_orders.guest_contact_value = ?
+                  ORDER BY latest_orders.id DESC
+                  LIMIT 1
+              )
+            ORDER BY order_items.id
+            """,
+            (
+                public_code,
+                guest_contact_method,
+                guest_contact_value,
+                guest_contact_method,
+                guest_contact_value,
+            ),
+        ).fetchall()
+    finally:
+        connection.close()
+
+    if not rows:
+        return None
+    first = rows[0]
+    return {
+        "public_order_number": first["public_order_number"],
+        "guest_edit_code_hash": first["guest_edit_code_hash"],
+        "customer_name": first["customer_name"],
+        "total_amount": first["total_amount"],
         "items": [
             {
                 "item_id": row["item_id"],

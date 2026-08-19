@@ -17,6 +17,7 @@ from backend.database import (
     GroupNotFoundError,
     GroupOrderAlreadyExistsError,
     GroupOrderAccessDeniedError,
+    GroupOrderEditCodeDeniedError,
     GroupOrderValidationError,
     StoreManagementAccessDeniedError,
     StoreInactiveError,
@@ -52,6 +53,7 @@ from backend.group_orders import (
     get_user_orders,
     get_saved_menus,
     get_personal_group_order,
+    recover_guest_group_order,
     set_owned_group_archived,
     set_user_order_archived,
 )
@@ -73,6 +75,8 @@ from backend.order_abuse_guard import (
     DuplicateOrderSubmissionError,
     OrderRateLimitExceededError,
     protect_order_submission,
+    record_edit_code_failure,
+    clear_edit_code_failures,
     reset_order_abuse_guard,
 )
 from backend.schemas import (
@@ -85,6 +89,8 @@ from backend.schemas import (
     GroupCreateResponse,
     GroupOrderCreateRequest,
     GroupOrderCreateResponse,
+    GroupOrderRecoveryRequest,
+    GroupOrderRecoveryResponse,
     GroupManagementResponse,
     MyGroupSummary,
     MyGroupsResponse,
@@ -999,6 +1005,50 @@ async def get_group_qr(public_code: str, request: Request) -> Response:
 
 
 @app.post(
+    "/api/groups/{public_code}/orders/recover",
+    response_model=GroupOrderRecoveryResponse,
+)
+async def recover_group_order(
+    public_code: str,
+    recovery: GroupOrderRecoveryRequest,
+    request: Request,
+) -> GroupOrderRecoveryResponse:
+    """讓未登入訪客以聯絡方式與六碼修改碼載入自己的原訂單。"""
+    normalized_code = public_code.strip().upper()
+    source_ip = request.client.host if request.client else "unknown"
+    identity = f"guest:{recovery.contact_method}:{recovery.contact_value}"
+    scope = f"group:{normalized_code}"
+    try:
+        order = recover_guest_group_order(normalized_code, recovery)
+        clear_edit_code_failures(
+            scope=scope, source_ip=source_ip, identity=identity
+        )
+        return GroupOrderRecoveryResponse(**order)
+    except GroupOrderEditCodeDeniedError as error:
+        try:
+            record_edit_code_failure(
+                scope=scope, source_ip=source_ip, identity=identity
+            )
+        except OrderRateLimitExceededError as rate_error:
+            raise HTTPException(
+                status_code=429,
+                detail="修改碼嘗試次數過多，請稍後再試。",
+                headers={"Retry-After": str(rate_error.retry_after_seconds)},
+            ) from rate_error
+        raise HTTPException(
+            status_code=403,
+            detail=(
+                "找不到可修改的訂單，或修改碼不正確。"
+                "較早建立、尚未設定修改碼的訂單仍需使用原個人連結。"
+            ),
+        ) from error
+    except DATABASE_ERROR_TYPES as error:
+        raise HTTPException(
+            status_code=500, detail="原訂單暫時無法載入，請稍後再試。"
+        ) from error
+
+
+@app.post(
     "/api/groups/{public_code}/orders",
     response_model=GroupOrderCreateResponse,
     status_code=201,
@@ -1069,6 +1119,22 @@ async def submit_group_order(
         raise HTTPException(
             status_code=403,
             detail="無法修改原訂單，請使用第一次送單的裝置或登入原帳號。",
+        ) from error
+    except GroupOrderEditCodeDeniedError as error:
+        try:
+            record_edit_code_failure(
+                scope=f"group:{normalized_code}",
+                source_ip=source_ip,
+                identity=identity,
+            )
+        except OrderRateLimitExceededError as rate_error:
+            raise HTTPException(
+                status_code=429,
+                detail="修改碼嘗試次數過多，請稍後再試。",
+                headers={"Retry-After": str(rate_error.retry_after_seconds)},
+            ) from rate_error
+        raise HTTPException(
+            status_code=403, detail="修改碼不正確，無法變更原訂單。"
         ) from error
     except GroupNotFoundError as error:
         raise HTTPException(
