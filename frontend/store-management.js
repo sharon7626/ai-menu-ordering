@@ -30,6 +30,13 @@ function formatPrice(amount) {
   return `NT$ ${amount.toLocaleString("zh-TW")}`;
 }
 
+function formatOrderIdentity(order) {
+  const labels = { google: "Google 帳號", phone: "手機", email: "Email" };
+  if (order.identity_method === "legacy") return "舊訂單（未記錄聯絡身分）";
+  const label = labels[order.identity_method] || "聯絡身分";
+  return order.identity_value ? `${label}：${order.identity_value}` : label;
+}
+
 function showError(message) {
   statusPanel.textContent = message;
   statusPanel.dataset.state = "error";
@@ -126,8 +133,11 @@ function renderManagement(store, token) {
       list.append(row);
     });
     const time = document.createElement("p");
+    const identity = document.createElement("p");
+    identity.className = "order-identity";
+    identity.textContent = formatOrderIdentity(order);
     time.textContent = `送單時間：${new Date(order.created_at).toLocaleString("zh-TW")}`;
-    card.append(heading, list, time);
+    card.append(heading, identity, list, time);
     ordersList.append(card);
   });
 

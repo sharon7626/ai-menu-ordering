@@ -118,11 +118,11 @@ class HomeNavigationTests(unittest.TestCase):
         store_script = Path("frontend/store.js").read_text(encoding="utf-8")
 
         self.assertIn(
-            '<script src="/frontend/group.js?v=20260811-2" defer></script>',
+            '<script src="/frontend/group.js?v=20260819-2" defer></script>',
             group_html,
         )
         self.assertIn(
-            '<script src="/frontend/store.js?v=20260811-2" defer></script>',
+            '<script src="/frontend/store.js?v=20260819-2" defer></script>',
             store_html,
         )
         self.assertIn("window.AppAuth?.getAuthorizationHeaders", group_script)

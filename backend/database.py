@@ -107,6 +107,8 @@ POSTGRES_SCHEMA_STATEMENTS = (
         order_access_token_hash TEXT,
         user_id BIGINT REFERENCES app_users(id),
         customer_name TEXT NOT NULL CHECK (char_length(trim(customer_name)) > 0),
+        guest_contact_method TEXT CHECK (guest_contact_method IN ('phone', 'email')),
+        guest_contact_value TEXT,
         total_amount INTEGER NOT NULL CHECK (total_amount >= 0),
         created_at TEXT NOT NULL,
         archived_at TEXT,
@@ -131,6 +133,8 @@ POSTGRES_SCHEMA_STATEMENTS = (
     "ALTER TABLE group_sessions ADD COLUMN IF NOT EXISTS archived_at TEXT",
     "ALTER TABLE orders ADD COLUMN IF NOT EXISTS user_id BIGINT REFERENCES app_users(id)",
     "ALTER TABLE orders ADD COLUMN IF NOT EXISTS archived_at TEXT",
+    "ALTER TABLE orders ADD COLUMN IF NOT EXISTS guest_contact_method TEXT",
+    "ALTER TABLE orders ADD COLUMN IF NOT EXISTS guest_contact_value TEXT",
     """
     CREATE TABLE IF NOT EXISTS order_items (
         id BIGSERIAL PRIMARY KEY,
@@ -256,6 +260,8 @@ CREATE TABLE IF NOT EXISTS orders (
     order_access_token_hash TEXT,
     user_id INTEGER,
     customer_name TEXT NOT NULL CHECK (length(trim(customer_name)) > 0),
+    guest_contact_method TEXT CHECK (guest_contact_method IN ('phone', 'email')),
+    guest_contact_value TEXT,
     total_amount INTEGER NOT NULL CHECK (total_amount >= 0),
     created_at TEXT NOT NULL,
     archived_at TEXT,
@@ -454,6 +460,7 @@ def initialize_database(database_path: Path | None = None) -> Path | str:
         _add_missing_account_columns(connection)
         _add_missing_store_owner_column(connection)
         _add_missing_archive_columns(connection)
+        _add_missing_guest_contact_columns(connection)
         connection.executescript(GROUP_INDEX_SQL)
         connection.commit()
     finally:
@@ -536,6 +543,17 @@ def _add_missing_archive_columns(connection: sqlite3.Connection) -> None:
     }
     if "archived_at" not in order_columns:
         connection.execute("ALTER TABLE orders ADD COLUMN archived_at TEXT")
+
+
+def _add_missing_guest_contact_columns(connection: sqlite3.Connection) -> None:
+    """新增訪客聯絡身分欄位；既有訂單維持空值且不猜測資料。"""
+    order_columns = {
+        row["name"] for row in connection.execute("PRAGMA table_info(orders)")
+    }
+    if "guest_contact_method" not in order_columns:
+        connection.execute("ALTER TABLE orders ADD COLUMN guest_contact_method TEXT")
+    if "guest_contact_value" not in order_columns:
+        connection.execute("ALTER TABLE orders ADD COLUMN guest_contact_value TEXT")
 
 
 def upsert_app_user(
@@ -1130,6 +1148,8 @@ def save_group_order(
     order_access_token_hash: str,
     created_at: datetime,
     user_id: int | None = None,
+    guest_contact_method: str | None = None,
+    guest_contact_value: str | None = None,
     database_path: Path | None = None,
 ) -> dict:
     """依團購菜單快照重新核價，並在單一交易中建立個人訂單。"""
@@ -1181,6 +1201,13 @@ def save_group_order(
                 }
             )
 
+        if user_id is None and (
+            guest_contact_method is None or guest_contact_value is None
+        ):
+            raise GroupOrderValidationError(
+                "未登入時，請提供手機號碼或 Email 以辨識訂購者"
+            )
+
         sequence = group_row["next_order_sequence"]
         public_order_number = f"{public_code}-{sequence:03d}"
         total_amount = sum(item["subtotal"] for item in stored_items)
@@ -1201,10 +1228,12 @@ def save_group_order(
                 order_access_token_hash,
                 user_id,
                 customer_name,
+                guest_contact_method,
+                guest_contact_value,
                 total_amount,
                 created_at
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 group_row["id"],
@@ -1212,6 +1241,8 @@ def save_group_order(
                 order_access_token_hash,
                 user_id,
                 customer_name,
+                guest_contact_method,
+                guest_contact_value,
                 total_amount,
                 created_at.isoformat(),
             ),
@@ -1362,6 +1393,11 @@ def get_group_management_data_for_access_check(
                 orders.id AS order_id,
                 orders.public_order_number,
                 orders.customer_name,
+                orders.user_id,
+                orders.guest_contact_method,
+                orders.guest_contact_value,
+                app_users.email AS account_email,
+                app_users.display_name AS account_display_name,
                 orders.total_amount,
                 orders.created_at,
                 order_items.item_id,
@@ -1371,6 +1407,7 @@ def get_group_management_data_for_access_check(
                 order_items.note,
                 order_items.subtotal
             FROM orders
+            LEFT JOIN app_users ON app_users.id = orders.user_id
             LEFT JOIN order_items ON order_items.order_id = orders.id
             WHERE orders.group_session_id = ?
             ORDER BY orders.created_at, orders.id, order_items.id
@@ -1387,6 +1424,15 @@ def get_group_management_data_for_access_check(
             orders_by_id[order_id] = {
                 "public_order_number": row["public_order_number"],
                 "customer_name": row["customer_name"],
+                "identity_method": (
+                    "google" if row["user_id"] is not None
+                    else row["guest_contact_method"] or "legacy"
+                ),
+                "identity_value": (
+                    (row["account_email"] or row["account_display_name"])
+                    if row["user_id"] is not None
+                    else row["guest_contact_value"]
+                ),
                 "total_amount": row["total_amount"],
                 "created_at": row["created_at"],
                 "items": [],
@@ -1694,6 +1740,8 @@ def save_store_order(
     order_access_token_hash: str,
     created_at: datetime,
     user_id: int | None = None,
+    guest_contact_method: str | None = None,
+    guest_contact_value: str | None = None,
     database_path: Path | None = None,
 ) -> dict:
     """依店家目前菜單重新核價，並在單一交易中建立個人訂單。"""
@@ -1744,6 +1792,13 @@ def save_store_order(
                 }
             )
 
+        if user_id is None and (
+            guest_contact_method is None or guest_contact_value is None
+        ):
+            raise StoreOrderValidationError(
+                "未登入時，請提供手機號碼或 Email 以辨識訂購者"
+            )
+
         sequence = store_row["next_order_sequence"]
         public_order_number = f"S-{public_slug.upper()}-{sequence:03d}"
         total_amount = sum(item["subtotal"] for item in stored_items)
@@ -1764,10 +1819,12 @@ def save_store_order(
                 order_access_token_hash,
                 user_id,
                 customer_name,
+                guest_contact_method,
+                guest_contact_value,
                 total_amount,
                 created_at
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 store_row["id"],
@@ -1775,6 +1832,8 @@ def save_store_order(
                 order_access_token_hash,
                 user_id,
                 customer_name,
+                guest_contact_method,
+                guest_contact_value,
                 total_amount,
                 created_at.isoformat(),
             ),
@@ -1916,6 +1975,11 @@ def get_store_management_data_for_access_check(
                 orders.id AS order_id,
                 orders.public_order_number,
                 orders.customer_name,
+                orders.user_id,
+                orders.guest_contact_method,
+                orders.guest_contact_value,
+                app_users.email AS account_email,
+                app_users.display_name AS account_display_name,
                 orders.total_amount,
                 orders.created_at,
                 order_items.item_id,
@@ -1925,6 +1989,7 @@ def get_store_management_data_for_access_check(
                 order_items.note,
                 order_items.subtotal
             FROM orders
+            LEFT JOIN app_users ON app_users.id = orders.user_id
             LEFT JOIN order_items ON order_items.order_id = orders.id
             WHERE orders.store_profile_id = ?
             ORDER BY orders.id, order_items.id
@@ -1941,6 +2006,15 @@ def get_store_management_data_for_access_check(
             {
                 "public_order_number": row["public_order_number"],
                 "customer_name": row["customer_name"],
+                "identity_method": (
+                    "google" if row["user_id"] is not None
+                    else row["guest_contact_method"] or "legacy"
+                ),
+                "identity_value": (
+                    (row["account_email"] or row["account_display_name"])
+                    if row["user_id"] is not None
+                    else row["guest_contact_value"]
+                ),
                 "total_amount": row["total_amount"],
                 "created_at": row["created_at"],
                 "items": [],

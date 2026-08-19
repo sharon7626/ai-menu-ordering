@@ -343,12 +343,61 @@ button {
   font-weight: 800;
 }
 
-#customer-name {
+#customer-name,
+#contact-value,
+#contact-method {
   width: 100%;
   min-height: 2.8rem;
   padding: 0.65rem 0.75rem;
   border: 1px solid #baa994;
   border-radius: 0.55rem;
+  background: #fff;
+}
+
+.order-identity-panel {
+  margin: 0.25rem 0;
+  padding: 0.8rem;
+  border: 1px solid #ded0c1;
+  border-radius: 0.65rem;
+  background: #f8f3ed;
+}
+
+.account-identity {
+  margin: 0;
+  color: #245b38;
+  font-weight: 800;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.guest-identity-fields {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.guest-identity-fields[hidden] {
+  display: none;
+}
+
+.guest-identity-fields .identity-title {
+  margin: 0;
+  color: #8d3f2d;
+  font-weight: 900;
+}
+
+.guest-identity-fields small {
+  color: #6d6259;
+  line-height: 1.5;
+}
+
+.order-honeypot {
+  position: absolute;
+  left: -10000px;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  opacity: 0;
+  pointer-events: none;
 }
 
 #order-status a {

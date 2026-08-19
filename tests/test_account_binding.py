@@ -28,6 +28,8 @@ def confirmation(name: str) -> dict:
 def order_payload(name: str) -> dict:
     return {
         "customer_name": name,
+        "contact_method": "phone",
+        "contact_value": "0912345678",
         "items": [{"item_id": "item-a-a", "quantity": 1, "note": ""}],
     }
 

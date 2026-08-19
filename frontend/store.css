@@ -336,6 +336,7 @@ body {
 }
 
 #order-form input,
+#order-form select,
 #order-form button {
   width: 100%;
   padding: 0.75rem;
@@ -345,6 +346,57 @@ body {
 
 #order-form input {
   border: 1px solid #b9ad9f;
+}
+
+#order-form select {
+  border: 1px solid #b9ad9f;
+  background: #fff;
+}
+
+.order-identity-panel {
+  margin: 0.25rem 0;
+  padding: 0.8rem;
+  border: 1px solid #ded0c1;
+  border-radius: 0.65rem;
+  background: #f8f3ed;
+}
+
+.account-identity {
+  margin: 0;
+  color: #245b38;
+  font-weight: 800;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.guest-identity-fields {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.guest-identity-fields[hidden] {
+  display: none;
+}
+
+.guest-identity-fields .identity-title {
+  margin: 0;
+  color: #8d3f2d;
+  font-weight: 900;
+}
+
+.guest-identity-fields small {
+  color: #6d6259;
+  line-height: 1.5;
+}
+
+.order-honeypot {
+  position: absolute;
+  left: -10000px;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  opacity: 0;
+  pointer-events: none;
 }
 
 #order-form button {

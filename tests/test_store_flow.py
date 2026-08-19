@@ -91,6 +91,8 @@ class CompleteStoreAndDualModeFlowTests(unittest.TestCase):
                             f"/api/stores/{slug}/orders",
                             json={
                                 "customer_name": "小美",
+                                "contact_method": "phone",
+                                "contact_value": "0912345678",
                                 "items": [
                                     {"item_id": chicken_id, "quantity": 1},
                                     {"item_id": tea_id, "quantity": 1},
@@ -101,6 +103,8 @@ class CompleteStoreAndDualModeFlowTests(unittest.TestCase):
                             f"/api/stores/{slug}/orders",
                             json={
                                 "customer_name": "小華",
+                                "contact_method": "email",
+                                "contact_value": "xiaohua@example.com",
                                 "items": [{"item_id": chicken_id, "quantity": 2}],
                             },
                         )
@@ -148,6 +152,8 @@ class CompleteStoreAndDualModeFlowTests(unittest.TestCase):
                             f"/api/groups/{group_code}/orders",
                             json={
                                 "customer_name": "團購顧客",
+                                "contact_method": "phone",
+                                "contact_value": "0912345678",
                                 "items": [{"item_id": chicken_id, "quantity": 1}],
                             },
                         )

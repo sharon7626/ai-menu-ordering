@@ -72,6 +72,8 @@ class GroupOrderTests(unittest.TestCase):
                     f"/api/groups/{code}/orders",
                     json={
                         "customer_name": name,
+                        "contact_method": "phone",
+                        "contact_value": "0912345678",
                         "items": [{"item_id": "item-a-a", "quantity": quantity}],
                     },
                 )
@@ -183,6 +185,8 @@ class GroupOrderTests(unittest.TestCase):
                     "/api/groups/ABC234/orders",
                     json={
                         "customer_name": "測試者",
+                        "contact_method": "phone",
+                        "contact_value": "0912345678",
                         "items": [{"item_id": "item-a-b", "quantity": 1}],
                     },
                 )
@@ -190,6 +194,8 @@ class GroupOrderTests(unittest.TestCase):
                     "/api/groups/ABC234/orders",
                     json={
                         "customer_name": "測試者",
+                        "contact_method": "phone",
+                        "contact_value": "0912345678",
                         "items": [
                             {
                                 "item_id": "item-a-a",

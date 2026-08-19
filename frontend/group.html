@@ -7,11 +7,11 @@
     <title>加入團購｜席間</title>
     <link rel="stylesheet" href="/frontend/design-system.css?v=20260811-1">
     <link rel="stylesheet" href="/frontend/navigation.css?v=20260811-3">
-    <link rel="stylesheet" href="/frontend/group.css">
+    <link rel="stylesheet" href="/frontend/group.css?v=20260819-2">
     <link rel="stylesheet" href="/frontend/brand-pages.css?v=20260811-1">
     <script src="/frontend/menu-variants.js?v=20260808-1" defer></script>
     <script src="/frontend/auth.js?v=20260811-1" type="module"></script>
-    <script src="/frontend/group.js?v=20260811-2" defer></script>
+    <script src="/frontend/group.js?v=20260819-2" defer></script>
   </head>
   <body>
     <nav class="top-home-nav" aria-label="主要導覽"><a class="top-home-brand" href="/" aria-label="席間首頁"><span class="top-home-brand-mark" aria-hidden="true">席</span><span class="top-home-brand-name">席間<small>MENU · ORDER · TOGETHER</small></span></a></nav>
@@ -76,6 +76,38 @@
                 placeholder="請輸入姓名"
                 required
               >
+              <div class="order-identity-panel">
+                <p id="account-identity" class="account-identity" hidden></p>
+                <div id="guest-identity-fields" class="guest-identity-fields">
+                  <p class="identity-title">未登入訪客身分</p>
+                  <label for="contact-method">聯絡方式</label>
+                  <select id="contact-method" name="contact-method">
+                    <option value="phone">手機號碼</option>
+                    <option value="email">Email</option>
+                  </select>
+                  <label id="contact-value-label" for="contact-value">手機號碼</label>
+                  <input
+                    id="contact-value"
+                    name="contact-value"
+                    type="tel"
+                    inputmode="tel"
+                    autocomplete="tel"
+                    maxlength="254"
+                    placeholder="例如：0912345678"
+                  >
+                  <small>僅供統籌辨識訂購者，不會顯示在公開菜單。</small>
+                </div>
+              </div>
+              <label class="order-honeypot" aria-hidden="true">
+                網站
+                <input
+                  id="order-website"
+                  name="website"
+                  type="text"
+                  autocomplete="off"
+                  tabindex="-1"
+                >
+              </label>
               <button id="submit-order" type="submit" disabled>送出訂單</button>
               <p id="order-status" class="status" role="status" aria-live="polite" hidden></p>
             </form>

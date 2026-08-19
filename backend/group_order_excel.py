@@ -209,6 +209,16 @@ def _package_workbook(sheets: list[bytes], sheet_names: tuple[str, ...]) -> byte
     return output.getvalue()
 
 
+def _format_order_identity(order: dict) -> str:
+    method = order.get("identity_method", "legacy")
+    value = order.get("identity_value")
+    labels = {"google": "Google 帳號", "phone": "手機", "email": "Email"}
+    if method == "legacy":
+        return "舊訂單（未記錄）"
+    label = labels.get(method, "聯絡資料")
+    return f"{label}：{value}" if value else label
+
+
 def build_group_order_workbook(group: dict) -> bytes:
     """建立含餐點、訂購者合計與個人明細三張工作表的 XLSX。"""
     status = "進行中" if group["status"] == "open" else "已截止"
@@ -234,9 +244,11 @@ def build_group_order_workbook(group: dict) -> bytes:
     detail_rows = []
     for order in group["orders"]:
         created_at = _format_created_at(order["created_at"])
+        identity = _format_order_identity(order)
         purchaser_rows.append(
             [
                 ("text", order["customer_name"]),
+                ("text", identity),
                 ("number", sum(item["quantity"] for item in order["items"])),
                 ("currency", order["total_amount"]),
                 ("text", created_at),
@@ -246,6 +258,7 @@ def build_group_order_workbook(group: dict) -> bytes:
             detail_rows.append(
                 [
                     ("text", order["customer_name"]),
+                    ("text", identity),
                     ("text", item["item_name"]),
                     ("wrap", item["note"] or ""),
                     ("currency", item["unit_price"]),
@@ -266,16 +279,16 @@ def build_group_order_workbook(group: dict) -> bytes:
         _sheet_xml(
             title=f"{group['restaurant_name']}｜訂購者合計",
             metadata=metadata,
-            headers=["姓名", "餐點總數量", "合計金額", "送單時間"],
+            headers=["姓名", "身分辨識", "餐點總數量", "合計金額", "送單時間"],
             rows=purchaser_rows,
-            widths=[18, 15, 16, 20],
+            widths=[18, 28, 15, 16, 20],
         ),
         _sheet_xml(
             title=f"{group['restaurant_name']}｜個人明細",
             metadata=metadata,
-            headers=["姓名", "品項名稱", "需求備註", "單價", "數量", "小計", "送單時間"],
+            headers=["姓名", "身分辨識", "品項名稱", "需求備註", "單價", "數量", "小計", "送單時間"],
             rows=detail_rows,
-            widths=[16, 26, 30, 13, 10, 14, 20],
+            widths=[16, 28, 26, 30, 13, 10, 14, 20],
         ),
     ]
 
@@ -307,9 +320,11 @@ def build_store_order_workbook(store: dict) -> bytes:
     detail_rows = []
     for order in store["orders"]:
         created_at = _format_created_at(order["created_at"])
+        identity = _format_order_identity(order)
         customer_rows.append(
             [
                 ("text", order["customer_name"]),
+                ("text", identity),
                 ("number", sum(item["quantity"] for item in order["items"])),
                 ("currency", order["total_amount"]),
                 ("text", created_at),
@@ -319,6 +334,7 @@ def build_store_order_workbook(store: dict) -> bytes:
             detail_rows.append(
                 [
                     ("text", order["customer_name"]),
+                    ("text", identity),
                     ("text", item["item_name"]),
                     ("wrap", item["note"] or ""),
                     ("currency", item["unit_price"]),
@@ -339,16 +355,16 @@ def build_store_order_workbook(store: dict) -> bytes:
         _sheet_xml(
             title=f"{store['restaurant_name']}｜顧客合計",
             metadata=metadata,
-            headers=["姓名", "餐點總數量", "合計金額", "送單時間"],
+            headers=["姓名", "身分辨識", "餐點總數量", "合計金額", "送單時間"],
             rows=customer_rows,
-            widths=[18, 15, 16, 20],
+            widths=[18, 28, 15, 16, 20],
         ),
         _sheet_xml(
             title=f"{store['restaurant_name']}｜顧客明細",
             metadata=metadata,
-            headers=["姓名", "品項名稱", "需求備註", "單價", "數量", "小計", "送單時間"],
+            headers=["姓名", "身分辨識", "品項名稱", "需求備註", "單價", "數量", "小計", "送單時間"],
             rows=detail_rows,
-            widths=[16, 26, 30, 13, 10, 14, 20],
+            widths=[16, 28, 26, 30, 13, 10, 14, 20],
         ),
     ]
     return _package_workbook(sheets, ("餐點彙整", "顧客合計", "顧客明細"))

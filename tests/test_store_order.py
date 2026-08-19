@@ -59,6 +59,8 @@ class StoreOrderTests(unittest.TestCase):
             f"/api/stores/{slug}/orders",
             json={
                 "customer_name": name,
+                "contact_method": "phone",
+                "contact_value": "0912345678",
                 "items": [
                     {"item_id": "item-a-a", "quantity": first_quantity},
                     {"item_id": "item-a-b", "quantity": 1},
@@ -118,6 +120,8 @@ class StoreOrderTests(unittest.TestCase):
                     f"/api/stores/{first_store['public_slug']}/orders",
                     json={
                         "customer_name": "顧客乙",
+                        "contact_method": "phone",
+                        "contact_value": "0912345678",
                         "items": [{"item_id": "item-not-found", "quantity": 1}],
                     },
                 )

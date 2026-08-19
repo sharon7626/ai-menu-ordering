@@ -55,6 +55,8 @@ class GroupManagementTests(unittest.TestCase):
                         "/api/groups/ABC234/orders",
                         json={
                             "customer_name": name,
+                            "contact_method": "phone",
+                            "contact_value": "0912345678",
                             "items": [
                                 {
                                     "item_id": "item-a-a",
@@ -146,7 +148,7 @@ class GroupManagementTests(unittest.TestCase):
 
         self.assertIn('id="download-excel"', page)
         self.assertIn(
-            '<script src="/frontend/group-management.js?v=20260811-2" type="module"></script>',
+            '<script src="/frontend/group-management.js?v=20260819-1" type="module"></script>',
             page,
         )
         self.assertIn("summariesByItem", script)
@@ -166,6 +168,8 @@ class GroupManagementTests(unittest.TestCase):
                     "/api/groups/ABC234/orders",
                     json={
                         "customer_name": "截止後",
+                        "contact_method": "phone",
+                        "contact_value": "0912345678",
                         "items": [{"item_id": "item-a-a", "quantity": 1}],
                     },
                 )

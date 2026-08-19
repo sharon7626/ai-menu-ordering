@@ -56,6 +56,8 @@ class GroupExcelTests(unittest.TestCase):
                         "/api/groups/XLS234/orders",
                         json={
                             "customer_name": customer,
+                            "contact_method": "phone",
+                            "contact_value": "0912345678",
                             "items": [{"item_id": "black-tea", "quantity": quantity, "note": note}],
                         },
                     )
@@ -106,6 +108,8 @@ class GroupExcelTests(unittest.TestCase):
         self.assertIn("半糖少冰", summary_xml)
         self.assertIn("無糖去冰", summary_xml)
         self.assertIn("餐點總數量", purchasers_xml)
+        self.assertIn("身分辨識", purchasers_xml)
+        self.assertIn("手機：0912345678", purchasers_xml)
         self.assertIn("合計金額", purchasers_xml)
         self.assertIn("小美", purchasers_xml)
         self.assertIn("小華", purchasers_xml)
@@ -113,6 +117,7 @@ class GroupExcelTests(unittest.TestCase):
         self.assertIn(">70</", purchasers_xml)
         self.assertIn(">35</", purchasers_xml)
         self.assertIn("小美", details_xml)
+        self.assertIn("身分辨識", details_xml)
         self.assertIn("小華", details_xml)
         self.assertNotIn(self.management_token, response.content.decode("latin-1"))
 

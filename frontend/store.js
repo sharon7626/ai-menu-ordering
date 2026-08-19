@@ -12,6 +12,12 @@ const cartItems = document.querySelector("#cart-items");
 const cartTotal = document.querySelector("#cart-total");
 const orderForm = document.querySelector("#order-form");
 const customerName = document.querySelector("#customer-name");
+const accountIdentity = document.querySelector("#account-identity");
+const guestIdentityFields = document.querySelector("#guest-identity-fields");
+const contactMethod = document.querySelector("#contact-method");
+const contactValueLabel = document.querySelector("#contact-value-label");
+const contactValue = document.querySelector("#contact-value");
+const orderWebsite = document.querySelector("#order-website");
 const submitOrder = document.querySelector("#submit-order");
 const orderStatus = document.querySelector("#order-status");
 const itemQuantities = new Map();
@@ -19,6 +25,38 @@ const itemNotes = new Map();
 const menuItemsById = new Map();
 let currentStore = null;
 let isSubmitting = false;
+
+function updateContactField() {
+  const usesPhone = contactMethod.value === "phone";
+  contactValueLabel.textContent = usesPhone ? "手機號碼" : "Email";
+  contactValue.type = usesPhone ? "tel" : "email";
+  contactValue.inputMode = usesPhone ? "tel" : "email";
+  contactValue.autocomplete = usesPhone ? "tel" : "email";
+  contactValue.placeholder = usesPhone ? "例如：0912345678" : "例如：name@example.com";
+}
+
+function renderOrderIdentity(user) {
+  const isSignedIn = Boolean(user);
+  accountIdentity.hidden = !isSignedIn;
+  guestIdentityFields.hidden = isSignedIn;
+  if (isSignedIn) {
+    accountIdentity.textContent = `已使用 Google 帳號辨識：${user.email || user.display_name || "已登入帳號"}`;
+  }
+}
+
+function validateGuestIdentity() {
+  const value = contactValue.value.trim();
+  if (!value) throw new Error("未登入時，請填寫手機號碼或 Email。");
+  if (contactMethod.value === "phone") {
+    const phone = value.replace(/[\s()-]/g, "");
+    if (!/^(09\d{8}|\+8869\d{8})$/.test(phone)) {
+      throw new Error("請輸入正確的台灣手機號碼，例如 0912345678。");
+    }
+  } else if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(value)) {
+    throw new Error("請輸入正確的 Email，例如 name@example.com。");
+  }
+  return { contact_method: contactMethod.value, contact_value: value };
+}
 
 function slugFromPath() {
   const match = window.location.pathname.match(/^\/stores\/([a-z]{8})$/);
@@ -277,11 +315,14 @@ orderForm.addEventListener("submit", async (event) => {
     const authHeaders = window.AppAuth?.getAuthorizationHeaders
       ? await window.AppAuth.getAuthorizationHeaders()
       : {};
+    const identity = authHeaders.Authorization ? {} : validateGuestIdentity();
     const response = await fetch(`/api/stores/${currentStore.public_slug}/orders`, {
       method: "POST",
       headers: { "Content-Type": "application/json", ...authHeaders },
       body: JSON.stringify({
         customer_name: name,
+        ...identity,
+        website: orderWebsite.value,
         items: selections.map(({ item, quantity, note }) => ({
           item_id: item.id,
           quantity,
@@ -332,6 +373,15 @@ orderForm.addEventListener("submit", async (event) => {
     updateSubmitButton();
   }
 });
+
+contactMethod.addEventListener("change", updateContactField);
+window.addEventListener("load", async () => {
+  if (!window.AppAuth) return;
+  await window.AppAuth.ready;
+  renderOrderIdentity(window.AppAuth.getCurrentUser());
+  window.AppAuth.onChange(renderOrderIdentity);
+});
+updateContactField();
 
 async function loadStore() {
   const slug = slugFromPath();

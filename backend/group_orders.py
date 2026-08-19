@@ -187,6 +187,8 @@ def create_group_order(
         order_access_token_hash=hash_secret_token(order_access_token),
         created_at=created_at,
         user_id=user_id,
+        guest_contact_method=order.contact_method if user_id is None else None,
+        guest_contact_value=order.contact_value if user_id is None else None,
         database_path=database_path,
     )
     return CreatedGroupOrder(

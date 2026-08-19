@@ -60,6 +60,8 @@ class ItemNoteTests(unittest.TestCase):
                     "/api/groups/ABC234/orders",
                     json={
                         "customer_name": "小美",
+                        "contact_method": "phone",
+                        "contact_value": "0912345678",
                         "items": [
                             {
                                 "item_id": "item-a-a",
@@ -115,6 +117,8 @@ class ItemNoteTests(unittest.TestCase):
                     f"/api/stores/{store['public_slug']}/orders",
                     json={
                         "customer_name": "小華",
+                        "contact_method": "email",
+                        "contact_value": "xiaohua@example.com",
                         "items": [
                             {"item_id": "item-a-a", "quantity": 1, "note": "小辣"}
                         ],
@@ -144,6 +148,8 @@ class ItemNoteTests(unittest.TestCase):
                     "/api/groups/ABC234/orders",
                     json={
                         "customer_name": "小美",
+                        "contact_method": "phone",
+                        "contact_value": "0912345678",
                         "items": [
                             {"item_id": "item-a-a", "quantity": 1, "note": "字" * 201}
                         ],

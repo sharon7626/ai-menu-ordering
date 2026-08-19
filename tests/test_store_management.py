@@ -59,6 +59,8 @@ class StoreManagementTests(unittest.TestCase):
             f"/api/stores/{slug}/orders",
             json={
                 "customer_name": name,
+                "contact_method": "phone",
+                "contact_value": "0912345678",
                 "items": [
                     {"item_id": "item-a-a", "quantity": quantity, "note": note}
                 ],
@@ -166,7 +168,7 @@ class StoreManagementTests(unittest.TestCase):
         self.assertIn("management.xlsx", script)
         self.assertIn("餐點彙整", page)
         self.assertIn("下載 Excel 表格", page)
-        self.assertIn("store-management.js?v=20260812-1", page)
+        self.assertIn("store-management.js?v=20260819-1", page)
 
     def test_store_can_download_excel_with_summary_and_customer_details(self) -> None:
         with patch.dict(os.environ, {"DATABASE_URL": self.database_url}):
@@ -204,6 +206,8 @@ class StoreManagementTests(unittest.TestCase):
         self.assertIn("少飯", summary_xml)
         self.assertIn("小美", customers_xml)
         self.assertIn("小華", customers_xml)
+        self.assertIn("身分辨識", customers_xml)
+        self.assertIn("手機：0912345678", customers_xml)
         self.assertIn("小美", details_xml)
         self.assertIn("小華", details_xml)
         self.assertNotIn(token, response.content.decode("latin-1"))

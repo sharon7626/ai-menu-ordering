@@ -1,4 +1,5 @@
 from datetime import datetime
+import re
 from typing import Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -254,6 +255,9 @@ class GroupOrderCreateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     customer_name: str = Field(max_length=50)
+    contact_method: Literal["phone", "email"] | None = None
+    contact_value: str | None = Field(default=None, max_length=254)
+    website: str = Field(default="", max_length=200)
     items: list[GroupOrderSelection] = Field(min_length=1)
 
     @field_validator("customer_name")
@@ -263,6 +267,36 @@ class GroupOrderCreateRequest(BaseModel):
         if not cleaned_value:
             raise ValueError("取餐姓名不可空白")
         return cleaned_value
+
+    @model_validator(mode="after")
+    def contact_fields_must_be_complete_and_valid(self) -> Self:
+        """選填聯絡身分成對出現；是否必填由登入狀態在 API 層判斷。"""
+        if self.contact_method is None and self.contact_value is None:
+            return self
+        if self.contact_method is None or self.contact_value is None:
+            raise ValueError("請完整選擇聯絡方式並填寫聯絡資料")
+
+        cleaned_value = self.contact_value.strip()
+        if self.contact_method == "phone":
+            compact_phone = re.sub(r"[\s()-]", "", cleaned_value)
+            if compact_phone.startswith("+8869") and len(compact_phone) == 13:
+                compact_phone = f"0{compact_phone[4:]}"
+            if not re.fullmatch(r"09\d{8}", compact_phone):
+                raise ValueError("請輸入正確的台灣手機號碼，例如 0912345678")
+            self.contact_value = compact_phone
+        else:
+            normalized_email = cleaned_value.lower()
+            if not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", normalized_email):
+                raise ValueError("請輸入正確的 Email，例如 name@example.com")
+            self.contact_value = normalized_email
+        return self
+
+    @field_validator("website")
+    @classmethod
+    def bot_trap_must_stay_empty(cls, value: str) -> str:
+        if value.strip():
+            raise ValueError("訂單無法送出，請重新整理頁面後再試")
+        return ""
 
     @model_validator(mode="after")
     def selected_items_must_not_repeat(self) -> Self:
@@ -302,6 +336,8 @@ class ManagedGroupOrder(BaseModel):
 
     public_order_number: str
     customer_name: str
+    identity_method: Literal["google", "phone", "email", "legacy"]
+    identity_value: str | None = None
     total_amount: int = Field(ge=0)
     created_at: datetime
     items: list[OrderItem]

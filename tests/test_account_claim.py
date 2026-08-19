@@ -22,6 +22,8 @@ MENU = {
 }
 ORDER = {
     "customer_name": "訪客",
+    "contact_method": "email",
+    "contact_value": "guest@example.com",
     "items": [{"item_id": "item-a-a", "quantity": 1, "note": ""}],
 }
 

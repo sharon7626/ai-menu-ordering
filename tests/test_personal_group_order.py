@@ -52,6 +52,8 @@ class PersonalGroupOrderTests(unittest.TestCase):
                     "/api/groups/ABC234/orders",
                     json={
                         "customer_name": "小美",
+                        "contact_method": "email",
+                        "contact_value": "xiaomei@example.com",
                         "items": [{"item_id": "item-a-a", "quantity": 2}],
                     },
                 )

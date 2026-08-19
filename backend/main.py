@@ -67,6 +67,12 @@ from backend.menu_recognition import (
     MenuRecognitionResult,
     recognize_menu,
 )
+from backend.order_abuse_guard import (
+    DuplicateOrderSubmissionError,
+    OrderRateLimitExceededError,
+    protect_order_submission,
+    reset_order_abuse_guard,
+)
 from backend.schemas import (
     AcceptedOrder,
     AccountClaimResponse,
@@ -125,6 +131,7 @@ class MenuRecognitionResponse(MenuUploadResponse):
 async def lifespan(application: FastAPI) -> AsyncIterator[None]:
     """服務啟動時確認目前環境的資料表已建立。"""
     initialize_database()
+    reset_order_abuse_guard()
     yield
 
 
@@ -733,13 +740,38 @@ async def get_store_qr(public_slug: str, request: Request) -> Response:
 async def submit_store_order(
     public_slug: str,
     order: StoreOrderCreateRequest,
+    request: Request,
     authorization: Annotated[str | None, Header()] = None,
 ) -> StoreOrderCreateResponse:
     """依店家目前菜單核價並建立顧客的個人訂單。"""
     slug = public_slug.strip().lower()
     try:
         user_id = _resolve_optional_app_user_id(authorization)
-        created_order = create_store_order(slug, order, user_id=user_id)
+        identity = (
+            f"user:{user_id}"
+            if user_id is not None
+            else f"guest:{order.contact_method}:{order.contact_value}"
+        )
+        source_ip = request.client.host if request.client else "unknown"
+        with protect_order_submission(
+            scope=f"store:{slug}",
+            source_ip=source_ip,
+            identity=identity,
+            customer_name=order.customer_name,
+            items=[item.model_dump() for item in order.items],
+        ):
+            created_order = create_store_order(slug, order, user_id=user_id)
+    except DuplicateOrderSubmissionError as error:
+        raise HTTPException(
+            status_code=409,
+            detail="這筆訂單剛剛已送出，請勿重複送單。",
+        ) from error
+    except OrderRateLimitExceededError as error:
+        raise HTTPException(
+            status_code=429,
+            detail="短時間內送單次數過多，請稍後再試。",
+            headers={"Retry-After": str(error.retry_after_seconds)},
+        ) from error
     except StoreNotFoundError as error:
         raise HTTPException(status_code=404, detail="找不到這家店，請確認網址是否正確") from error
     except StoreInactiveError as error:
@@ -929,13 +961,38 @@ async def get_group_qr(public_code: str, request: Request) -> Response:
 async def submit_group_order(
     public_code: str,
     order: GroupOrderCreateRequest,
+    request: Request,
     authorization: Annotated[str | None, Header()] = None,
 ) -> GroupOrderCreateResponse:
     """依團購菜單快照核價並建立參與者的個人訂單。"""
     normalized_code = public_code.strip().upper()
     try:
         user_id = _resolve_optional_app_user_id(authorization)
-        created_order = create_group_order(normalized_code, order, user_id=user_id)
+        identity = (
+            f"user:{user_id}"
+            if user_id is not None
+            else f"guest:{order.contact_method}:{order.contact_value}"
+        )
+        source_ip = request.client.host if request.client else "unknown"
+        with protect_order_submission(
+            scope=f"group:{normalized_code}",
+            source_ip=source_ip,
+            identity=identity,
+            customer_name=order.customer_name,
+            items=[item.model_dump() for item in order.items],
+        ):
+            created_order = create_group_order(normalized_code, order, user_id=user_id)
+    except DuplicateOrderSubmissionError as error:
+        raise HTTPException(
+            status_code=409,
+            detail="這筆訂單剛剛已送出，請勿重複送單。",
+        ) from error
+    except OrderRateLimitExceededError as error:
+        raise HTTPException(
+            status_code=429,
+            detail="短時間內送單次數過多，請稍後再試。",
+            headers={"Retry-After": str(error.retry_after_seconds)},
+        ) from error
     except GroupNotFoundError as error:
         raise HTTPException(
             status_code=404,

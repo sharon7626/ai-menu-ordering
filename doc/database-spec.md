@@ -15,6 +15,8 @@ erDiagram
     orders {
         INTEGER id PK
         TEXT customer_name
+        TEXT guest_contact_method
+        TEXT guest_contact_value
         INTEGER total_amount
         TEXT created_at
     }
@@ -38,6 +40,8 @@ erDiagram
 | --- | --- | --- | --- |
 | `id` | INTEGER | 主鍵、自動編號 | 訂單的唯一識別碼。 |
 | `customer_name` | TEXT | 必填、去除空白後不可為空 | 顧客姓名。 |
+| `guest_contact_method` | TEXT | 選填，僅允許 `phone` 或 `email` | 未登入訪客的聯絡方式類型；登入訂單及舊訂單為 `NULL`。 |
+| `guest_contact_value` | TEXT | 選填，必須與類型成對 | 正規化後的訪客手機或 Email；只供私人管理與 Excel 使用。 |
 | `total_amount` | INTEGER | 必填、大於或等於 0 | 訂單總金額，單位為新臺幣元。 |
 | `created_at` | TEXT | 必填 | 使用包含時區的 ISO 8601 文字保存建立時間。 |
 
@@ -55,6 +59,8 @@ erDiagram
 | `subtotal` | INTEGER | 必填、等於單價乘以數量 | 此餐點的小計。 |
 
 即使日後菜單名稱或價格改變，訂單明細仍保留送單當下的名稱、價格與備註，讓歷史訂單內容不會跟著改變。
+
+登入訂單的可信任身分來自 `orders.user_id` 關聯的 `app_users`；訪客才使用 `guest_contact_method` 與 `guest_contact_value`。舊訂單兩個欄位皆為 `NULL`，系統以「舊訂單（未記錄）」呈現，不自動猜測或回填。聯絡資料不得出現在公開菜單或分享 API，也不得寫入 log。
 
 ## 5. 關聯與索引
 
@@ -78,7 +84,7 @@ sqlite:///./app.db
 & "C:\Users\sharo\anaconda3\python.exe" -m backend.database
 ```
 
-指令會建立 `app.db`、兩張資料表與必要索引。初始化可重複執行，不會刪除既有資料。`*.db` 已被 `.gitignore` 排除，不會提交至 Git。
+指令會建立 `app.db`、資料表與必要索引。初始化可重複執行；舊資料庫只新增可為 `NULL` 的訪客聯絡欄位，不會刪除或改寫既有資料。`*.db` 已被 `.gitignore` 排除，不會提交至 Git。
 
 ## 7. Render PostgreSQL
 
