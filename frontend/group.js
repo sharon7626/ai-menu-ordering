@@ -23,11 +23,64 @@ const contactValue = document.querySelector("#contact-value");
 const orderWebsite = document.querySelector("#order-website");
 const submitOrder = document.querySelector("#submit-order");
 const orderStatus = document.querySelector("#order-status");
+const repeatOrderDialog = document.querySelector("#repeat-order-dialog");
+const repeatOrderNumber = document.querySelector("#repeat-order-number");
 const itemQuantities = new Map();
 const itemNotes = new Map();
 const menuItemsById = new Map();
 let currentGroup = null;
 let isSubmitting = false;
+
+function errorMessage(result, fallback = "訂單暫時無法送出，請稍後再試。") {
+  if (typeof result?.detail === "string") return result.detail;
+  if (typeof result?.detail?.message === "string") return result.detail.message;
+  return fallback;
+}
+
+function chooseRepeatAction(publicOrderNumber) {
+  repeatOrderNumber.textContent = publicOrderNumber;
+  if (typeof repeatOrderDialog.showModal !== "function") {
+    return Promise.resolve(
+      window.confirm("這個身分已有訂單。按確定加購；按取消則以本次內容取代。")
+        ? "add"
+        : "replace",
+    );
+  }
+  repeatOrderDialog.returnValue = "";
+  repeatOrderDialog.showModal();
+  return new Promise((resolve) => {
+    repeatOrderDialog.addEventListener(
+      "close",
+      () => resolve(repeatOrderDialog.returnValue || "cancel"),
+      { once: true },
+    );
+  });
+}
+
+async function sendGroupOrder(payload, authHeaders) {
+  let response = await fetch(`/api/groups/${currentGroup.public_code}/orders`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...authHeaders },
+    body: JSON.stringify(payload),
+  });
+  let result = await response.json();
+
+  if (response.status === 409 && result.detail?.code === "ORDER_ACTION_REQUIRED") {
+    const action = await chooseRepeatAction(result.detail.public_order_number);
+    if (action === "cancel") {
+      throw new Error("已取消送出，原訂單沒有變更。");
+    }
+    response = await fetch(`/api/groups/${currentGroup.public_code}/orders`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...authHeaders },
+      body: JSON.stringify({ ...payload, repeat_action: action }),
+    });
+    result = await response.json();
+  }
+
+  if (!response.ok) throw new Error(errorMessage(result));
+  return result;
+}
 
 function updateContactField() {
   const usesPhone = contactMethod.value === "phone";
@@ -336,10 +389,8 @@ orderForm.addEventListener("submit", async (event) => {
       ? await window.AppAuth.getAuthorizationHeaders()
       : {};
     const identity = authHeaders.Authorization ? {} : validateGuestIdentity();
-    const response = await fetch(`/api/groups/${currentGroup.public_code}/orders`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", ...authHeaders },
-      body: JSON.stringify({
+    const result = await sendGroupOrder(
+      {
         customer_name: name,
         ...identity,
         website: orderWebsite.value,
@@ -348,23 +399,16 @@ orderForm.addEventListener("submit", async (event) => {
           quantity,
           note,
         })),
-      }),
-    });
-    const result = await response.json();
-    if (!response.ok) {
-      throw new Error(
-        typeof result.detail === "string"
-          ? result.detail
-          : "訂單暫時無法送出，請稍後再試。",
-      );
-    }
+      },
+      authHeaders,
+    );
 
     const orderUrl = new URL(result.order_url, window.location.origin);
     const orderLink = document.createElement("a");
     orderLink.href = orderUrl.href;
     orderLink.textContent = `查看個人訂單 ${result.public_order_number}`;
     orderStatus.replaceChildren(
-      document.createTextNode(`訂單已送出！你的訂單編號是 ${result.public_order_number}。 `),
+      document.createTextNode(`${result.message} 訂單編號是 ${result.public_order_number}。 `),
       orderLink,
     );
     orderStatus.dataset.state = "success";

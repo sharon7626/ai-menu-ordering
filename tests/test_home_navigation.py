@@ -118,7 +118,7 @@ class HomeNavigationTests(unittest.TestCase):
         store_script = Path("frontend/store.js").read_text(encoding="utf-8")
 
         self.assertIn(
-            '<script src="/frontend/group.js?v=20260819-2" defer></script>',
+            '<script src="/frontend/group.js?v=20260819-3" defer></script>',
             group_html,
         )
         self.assertIn(

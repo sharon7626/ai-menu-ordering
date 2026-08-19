@@ -2,6 +2,7 @@ import os
 import json
 import sqlite3
 import hashlib
+import hmac
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -361,6 +362,15 @@ class GroupClosedError(ValueError):
 
 class GroupOrderValidationError(ValueError):
     """訂單選擇與團購菜單快照不一致。"""
+
+
+class GroupOrderAlreadyExistsError(ValueError):
+    """同一身分在同一團購已有訂單。"""
+
+    def __init__(self, public_order_number: str, can_update: bool) -> None:
+        super().__init__("group order already exists")
+        self.public_order_number = public_order_number
+        self.can_update = can_update
 
 
 class GroupOrderAccessDeniedError(ValueError):
@@ -1150,6 +1160,9 @@ def save_group_order(
     user_id: int | None = None,
     guest_contact_method: str | None = None,
     guest_contact_value: str | None = None,
+    repeat_action: str | None = None,
+    existing_order_number: str | None = None,
+    existing_order_access_token_hash: str | None = None,
     database_path: Path | None = None,
 ) -> dict:
     """依團購菜單快照重新核價，並在單一交易中建立個人訂單。"""
@@ -1207,6 +1220,144 @@ def save_group_order(
             raise GroupOrderValidationError(
                 "未登入時，請提供手機號碼或 Email 以辨識訂購者"
             )
+
+        if user_id is not None:
+            existing_order = connection.execute(
+                """
+                SELECT id, public_order_number, order_access_token_hash,
+                       customer_name, total_amount, created_at
+                FROM orders
+                WHERE group_session_id = ? AND user_id = ?
+                ORDER BY id DESC
+                LIMIT 1
+                """,
+                (group_row["id"], user_id),
+            ).fetchone()
+        else:
+            existing_order = connection.execute(
+                """
+                SELECT id, public_order_number, order_access_token_hash,
+                       customer_name, total_amount, created_at
+                FROM orders
+                WHERE group_session_id = ?
+                  AND user_id IS NULL
+                  AND guest_contact_method = ?
+                  AND guest_contact_value = ?
+                ORDER BY id DESC
+                LIMIT 1
+                """,
+                (group_row["id"], guest_contact_method, guest_contact_value),
+            ).fetchone()
+
+        if existing_order is not None:
+            token_matches = bool(
+                existing_order_access_token_hash
+                and hmac.compare_digest(
+                    existing_order["order_access_token_hash"],
+                    existing_order_access_token_hash,
+                )
+            )
+            can_update = user_id is not None or token_matches
+            if repeat_action is None:
+                raise GroupOrderAlreadyExistsError(
+                    existing_order["public_order_number"], can_update
+                )
+            if (
+                not can_update
+                or (
+                    existing_order_number
+                    and existing_order_number
+                    != existing_order["public_order_number"]
+                )
+            ):
+                raise GroupOrderAccessDeniedError
+
+            if repeat_action == "add":
+                existing_items = connection.execute(
+                    """
+                    SELECT item_id, item_name, unit_price, quantity, note, subtotal
+                    FROM order_items
+                    WHERE order_id = ?
+                    ORDER BY id
+                    """,
+                    (existing_order["id"],),
+                ).fetchall()
+                merged_items = {
+                    (row["item_id"], row["note"]): {
+                        "item_id": row["item_id"],
+                        "item_name": row["item_name"],
+                        "unit_price": row["unit_price"],
+                        "quantity": row["quantity"],
+                        "note": row["note"],
+                        "subtotal": row["subtotal"],
+                    }
+                    for row in existing_items
+                }
+                for item in stored_items:
+                    item_key = (item["item_id"], item["note"])
+                    current = merged_items.get(item_key)
+                    if current is None:
+                        merged_items[item_key] = item
+                        continue
+                    current["quantity"] += item["quantity"]
+                    if item["note"]:
+                        current["note"] = item["note"]
+                    current["subtotal"] = (
+                        current["unit_price"] * current["quantity"]
+                    )
+                stored_items = list(merged_items.values())
+
+            total_amount = sum(item["subtotal"] for item in stored_items)
+            connection.execute(
+                """
+                UPDATE orders
+                SET order_access_token_hash = ?, customer_name = ?, total_amount = ?
+                WHERE id = ?
+                """,
+                (
+                    order_access_token_hash,
+                    customer_name,
+                    total_amount,
+                    existing_order["id"],
+                ),
+            )
+            connection.execute(
+                "DELETE FROM order_items WHERE order_id = ?",
+                (existing_order["id"],),
+            )
+            connection.executemany(
+                """
+                INSERT INTO order_items (
+                    order_id, item_id, item_name, unit_price, quantity, note, subtotal
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                [
+                    (
+                        existing_order["id"],
+                        item["item_id"],
+                        item["item_name"],
+                        item["unit_price"],
+                        item["quantity"],
+                        item["note"],
+                        item["subtotal"],
+                    )
+                    for item in stored_items
+                ],
+            )
+            connection.commit()
+            return {
+                "public_order_number": existing_order["public_order_number"],
+                "customer_name": customer_name,
+                "total_amount": total_amount,
+                "created_at": (
+                    existing_order["created_at"]
+                    if isinstance(existing_order["created_at"], datetime)
+                    else datetime.fromisoformat(existing_order["created_at"])
+                ),
+                "items": stored_items,
+                "was_updated": True,
+            }
 
         sequence = group_row["next_order_sequence"]
         public_order_number = f"{public_code}-{sequence:03d}"
@@ -1284,6 +1435,7 @@ def save_group_order(
             "total_amount": total_amount,
             "created_at": created_at,
             "items": stored_items,
+            "was_updated": False,
         }
     except Exception:
         connection.rollback()

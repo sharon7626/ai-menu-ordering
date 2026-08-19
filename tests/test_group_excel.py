@@ -51,13 +51,16 @@ class GroupExcelTests(unittest.TestCase):
         self.database_url = f"sqlite:///{database_path.as_posix()}"
         with patch.dict(os.environ, {"DATABASE_URL": self.database_url}):
             with TestClient(app) as client:
-                for customer, note, quantity in (("小美", "半糖少冰", 2), ("小華", "無糖去冰", 1)):
+                for customer, note, quantity, contact_value in (
+                    ("小美", "半糖少冰", 2, "0912345678"),
+                    ("小華", "無糖去冰", 1, "0987654321"),
+                ):
                     response = client.post(
                         "/api/groups/XLS234/orders",
                         json={
                             "customer_name": customer,
                             "contact_method": "phone",
-                            "contact_value": "0912345678",
+                            "contact_value": contact_value,
                             "items": [{"item_id": "black-tea", "quantity": quantity, "note": note}],
                         },
                     )

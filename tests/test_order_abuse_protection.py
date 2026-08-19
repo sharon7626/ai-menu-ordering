@@ -35,14 +35,24 @@ MENU = {
 }
 
 
-def group_payload(*, name: str = "測試者", note: str = "", website: str = "") -> dict:
-    return {
+def group_payload(
+    *,
+    name: str = "測試者",
+    note: str = "",
+    website: str = "",
+    contact_value: str = "0912-345-678",
+    repeat_action: str | None = None,
+) -> dict:
+    payload = {
         "customer_name": name,
         "contact_method": "phone",
-        "contact_value": "0912-345-678",
+        "contact_value": contact_value,
         "website": website,
         "items": [{"item_id": "item-a-a", "quantity": 1, "note": note}],
     }
+    if repeat_action is not None:
+        payload["repeat_action"] = repeat_action
+    return payload
 
 
 def store_confirmation() -> dict:
@@ -80,7 +90,7 @@ class OrderAbuseProtectionTests(unittest.TestCase):
     def tearDown(self) -> None:
         self.temporary_directory.cleanup()
 
-    def test_group_rejects_duplicate_submission(self) -> None:
+    def test_group_repeat_submission_requires_an_action(self) -> None:
         with patch.dict(os.environ, {"DATABASE_URL": self.database_url}):
             with TestClient(app) as client:
                 first = client.post("/api/groups/ABC234/orders", json=group_payload())
@@ -88,7 +98,12 @@ class OrderAbuseProtectionTests(unittest.TestCase):
 
         self.assertEqual(first.status_code, 201)
         self.assertEqual(duplicate.status_code, 409)
-        self.assertIn("重複送單", duplicate.json()["detail"])
+        self.assertEqual(
+            duplicate.json()["detail"]["code"], "ORDER_ACTION_REQUIRED"
+        )
+        self.assertEqual(
+            duplicate.json()["detail"]["public_order_number"], "ABC234-001"
+        )
 
     def test_group_rate_limits_sixth_distinct_order(self) -> None:
         with patch.dict(os.environ, {"DATABASE_URL": self.database_url}):
@@ -96,16 +111,31 @@ class OrderAbuseProtectionTests(unittest.TestCase):
                 accepted = [
                     client.post(
                         "/api/groups/ABC234/orders",
-                        json=group_payload(name=f"測試者{i}", note=f"第{i}筆"),
+                        json=group_payload(name="測試者", note="第0筆"),
                     )
-                    for i in range(5)
                 ]
+                for i in range(1, 5):
+                    accepted.append(
+                        client.post(
+                            "/api/groups/ABC234/orders",
+                            json=group_payload(
+                                name="測試者",
+                                note=f"第{i}筆",
+                                repeat_action="replace",
+                            ),
+                        )
+                    )
                 limited = client.post(
                     "/api/groups/ABC234/orders",
-                    json=group_payload(name="第六位", note="第六筆"),
+                    json=group_payload(
+                        name="測試者",
+                        note="第六筆",
+                        repeat_action="replace",
+                    ),
                 )
 
-        self.assertTrue(all(response.status_code == 201 for response in accepted))
+        self.assertEqual(accepted[0].status_code, 201)
+        self.assertTrue(all(response.status_code == 200 for response in accepted[1:]))
         self.assertEqual(limited.status_code, 429)
         self.assertIn("次數過多", limited.json()["detail"])
         self.assertGreater(int(limited.headers["Retry-After"]), 0)

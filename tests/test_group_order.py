@@ -35,6 +35,13 @@ GROUP_MENU = {
                     "price": 90,
                     "available": False,
                 },
+                {
+                    "id": "item-a-c",
+                    "name": "排骨便當",
+                    "description": "",
+                    "price": 100,
+                    "available": True,
+                },
             ],
         }
     ],
@@ -65,7 +72,13 @@ class GroupOrderTests(unittest.TestCase):
     def tearDown(self) -> None:
         self.temporary_directory.cleanup()
 
-    def post_order(self, code: str, name: str, quantity: int = 1):
+    def post_order(
+        self,
+        code: str,
+        name: str,
+        quantity: int = 1,
+        contact_value: str = "0912345678",
+    ):
         with patch.dict(os.environ, {"DATABASE_URL": self.database_url}):
             with TestClient(app) as client:
                 return client.post(
@@ -73,14 +86,16 @@ class GroupOrderTests(unittest.TestCase):
                     json={
                         "customer_name": name,
                         "contact_method": "phone",
-                        "contact_value": "0912345678",
+                        "contact_value": contact_value,
                         "items": [{"item_id": "item-a-a", "quantity": quantity}],
                     },
                 )
 
     def test_two_participants_receive_distinct_numbers_and_server_prices(self) -> None:
         first_response = self.post_order("ABC234", "小美", quantity=2)
-        second_response = self.post_order("ABC234", "小華", quantity=1)
+        second_response = self.post_order(
+            "ABC234", "小華", quantity=1, contact_value="0987654321"
+        )
 
         self.assertEqual(first_response.status_code, 201)
         self.assertEqual(second_response.status_code, 201)
@@ -143,6 +158,120 @@ class GroupOrderTests(unittest.TestCase):
 
         self.assertEqual(memberships[0]["group_session_id"], self.first_group_id)
         self.assertEqual(memberships[1]["group_session_id"], self.second_group_id)
+
+    def test_same_identity_adds_or_replaces_one_existing_order(self) -> None:
+        payload = {
+            "customer_name": "小美",
+            "contact_method": "phone",
+            "contact_value": "0912345678",
+            "items": [{"item_id": "item-a-a", "quantity": 1}],
+        }
+        with patch.dict(os.environ, {"DATABASE_URL": self.database_url}):
+            with TestClient(app) as client:
+                first = client.post("/api/groups/ABC234/orders", json=payload)
+                action_required = client.post(
+                    "/api/groups/ABC234/orders",
+                    json={
+                        **payload,
+                        "items": [
+                            {
+                                "item_id": "item-a-c",
+                                "quantity": 1,
+                                "note": "不要辣",
+                            }
+                        ],
+                    },
+                )
+                added = client.post(
+                    "/api/groups/ABC234/orders",
+                    json={
+                        **payload,
+                        "repeat_action": "add",
+                        "items": [
+                            {
+                                "item_id": "item-a-c",
+                                "quantity": 1,
+                                "note": "不要辣",
+                            }
+                        ],
+                    },
+                )
+                replaced = client.post(
+                    "/api/groups/ABC234/orders",
+                    json={
+                        **payload,
+                        "repeat_action": "replace",
+                        "items": [{"item_id": "item-a-a", "quantity": 2}],
+                    },
+                )
+
+        self.assertEqual(first.status_code, 201)
+        self.assertEqual(action_required.status_code, 409)
+        self.assertEqual(
+            action_required.json()["detail"]["code"], "ORDER_ACTION_REQUIRED"
+        )
+        self.assertEqual(added.status_code, 200)
+        self.assertEqual(replaced.status_code, 200)
+        self.assertEqual(
+            {
+                first.json()["public_order_number"],
+                added.json()["public_order_number"],
+                replaced.json()["public_order_number"],
+            },
+            {"ABC234-001"},
+        )
+        self.assertEqual(
+            {item["item_id"] for item in added.json()["items"]},
+            {"item-a-a", "item-a-c"},
+        )
+        self.assertEqual(replaced.json()["total_amount"], 240)
+        self.assertEqual(len(replaced.json()["items"]), 1)
+        self.assertEqual(replaced.json()["items"][0]["quantity"], 2)
+
+        connection = connect_database(self.database_path)
+        try:
+            order_count = connection.execute(
+                "SELECT COUNT(*) FROM orders WHERE group_session_id = ?",
+                (self.first_group_id,),
+            ).fetchone()[0]
+            next_sequence = connection.execute(
+                "SELECT next_order_sequence FROM group_sessions WHERE id = ?",
+                (self.first_group_id,),
+            ).fetchone()[0]
+        finally:
+            connection.close()
+        self.assertEqual(order_count, 1)
+        self.assertEqual(next_sequence, 2)
+
+    def test_same_identity_on_another_device_cannot_replace_by_phone_alone(self) -> None:
+        first = self.post_order("ABC234", "小美")
+        self.assertEqual(first.status_code, 201)
+
+        with patch.dict(os.environ, {"DATABASE_URL": self.database_url}):
+            with TestClient(app) as another_device:
+                existing = another_device.post(
+                    "/api/groups/ABC234/orders",
+                    json={
+                        "customer_name": "冒用者",
+                        "contact_method": "phone",
+                        "contact_value": "0912345678",
+                        "items": [{"item_id": "item-a-c", "quantity": 1}],
+                    },
+                )
+                forbidden = another_device.post(
+                    "/api/groups/ABC234/orders",
+                    json={
+                        "customer_name": "冒用者",
+                        "contact_method": "phone",
+                        "contact_value": "0912345678",
+                        "repeat_action": "replace",
+                        "items": [{"item_id": "item-a-c", "quantity": 1}],
+                    },
+                )
+
+        self.assertEqual(existing.status_code, 409)
+        self.assertEqual(existing.json()["detail"]["code"], "ORDER_ALREADY_EXISTS")
+        self.assertEqual(forbidden.status_code, 403)
 
     def test_closed_group_rejects_new_order_without_advancing_sequence(self) -> None:
         connection = connect_database(self.database_path)

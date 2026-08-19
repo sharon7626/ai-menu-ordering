@@ -258,6 +258,7 @@ class GroupOrderCreateRequest(BaseModel):
     contact_method: Literal["phone", "email"] | None = None
     contact_value: str | None = Field(default=None, max_length=254)
     website: str = Field(default="", max_length=200)
+    repeat_action: Literal["add", "replace"] | None = None
     items: list[GroupOrderSelection] = Field(min_length=1)
 
     @field_validator("customer_name")
@@ -457,6 +458,8 @@ class StoreMenuUpdateResponse(BaseModel):
 
 class StoreOrderCreateRequest(GroupOrderCreateRequest):
     """店家顧客送出的最小訂單資料，價格由後端取得。"""
+
+    repeat_action: None = None
 
 
 class StoreOrderCreateResponse(BaseModel):

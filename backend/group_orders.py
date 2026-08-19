@@ -49,6 +49,7 @@ class CreatedGroupOrder:
     total_amount: int
     created_at: datetime
     items: list[dict]
+    was_updated: bool
 
 
 def hash_secret_token(token: str) -> str:
@@ -176,6 +177,8 @@ def create_group_order(
     order: GroupOrderCreateRequest,
     database_path: Path | None = None,
     user_id: int | None = None,
+    existing_order_number: str | None = None,
+    existing_order_access_token: str | None = None,
 ) -> CreatedGroupOrder:
     """建立團購個人訂單，原始查看 Token 只回傳給本次參與者。"""
     order_access_token = secrets.token_urlsafe(32)
@@ -189,6 +192,13 @@ def create_group_order(
         user_id=user_id,
         guest_contact_method=order.contact_method if user_id is None else None,
         guest_contact_value=order.contact_value if user_id is None else None,
+        repeat_action=order.repeat_action,
+        existing_order_number=existing_order_number,
+        existing_order_access_token_hash=(
+            hash_secret_token(existing_order_access_token)
+            if existing_order_access_token
+            else None
+        ),
         database_path=database_path,
     )
     return CreatedGroupOrder(
@@ -198,6 +208,7 @@ def create_group_order(
         total_amount=saved_order["total_amount"],
         created_at=saved_order["created_at"],
         items=saved_order["items"],
+        was_updated=saved_order["was_updated"],
     )
 
 

@@ -1,5 +1,6 @@
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
+import hashlib
 from pathlib import Path
 from typing import Annotated, AsyncIterator
 
@@ -14,6 +15,7 @@ from backend.database import (
     GroupClosedError,
     GroupManagementAccessDeniedError,
     GroupNotFoundError,
+    GroupOrderAlreadyExistsError,
     GroupOrderAccessDeniedError,
     GroupOrderValidationError,
     StoreManagementAccessDeniedError,
@@ -121,6 +123,7 @@ from backend.store_orders import (
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 FRONTEND_DIRECTORY = PROJECT_ROOT / "frontend"
 DATA_DIRECTORY = PROJECT_ROOT / "data"
+ORDER_COOKIE_MAX_AGE = 60 * 60 * 24 * 30
 
 
 class MenuRecognitionResponse(MenuUploadResponse):
@@ -143,6 +146,48 @@ app.mount(
     name="frontend",
 )
 app.mount("/data", StaticFiles(directory=DATA_DIRECTORY), name="data")
+
+
+def _group_order_cookie_name(public_code: str, identity: str) -> str:
+    """以不可逆身分指紋區隔同一瀏覽器中的不同團購訂單。"""
+    identity_hash = hashlib.sha256(identity.encode("utf-8")).hexdigest()[:16]
+    return f"seat_group_{public_code.lower()}_{identity_hash}"
+
+
+def _group_order_cookie(
+    request: Request, public_code: str, identity: str
+) -> tuple[str | None, str | None]:
+    raw_value = request.cookies.get(_group_order_cookie_name(public_code, identity), "")
+    if "." not in raw_value:
+        return None, None
+    public_order_number, order_access_token = raw_value.split(".", 1)
+    if not public_order_number or not order_access_token:
+        return None, None
+    return public_order_number, order_access_token
+
+
+def _remember_group_order(
+    response: Response,
+    request: Request,
+    public_code: str,
+    identity: str,
+    public_order_number: str,
+    order_access_token: str,
+) -> None:
+    forwarded_scheme = request.headers.get("x-forwarded-proto", "")
+    is_https = (
+        request.url.scheme == "https"
+        or forwarded_scheme.split(",")[0].strip().lower() == "https"
+    )
+    response.set_cookie(
+        key=_group_order_cookie_name(public_code, identity),
+        value=f"{public_order_number}.{order_access_token}",
+        max_age=ORDER_COOKIE_MAX_AGE,
+        httponly=True,
+        secure=is_https,
+        samesite="lax",
+        path="/",
+    )
 
 
 def _verify_firebase_authorization(
@@ -962,6 +1007,7 @@ async def submit_group_order(
     public_code: str,
     order: GroupOrderCreateRequest,
     request: Request,
+    response: Response,
     authorization: Annotated[str | None, Header()] = None,
 ) -> GroupOrderCreateResponse:
     """依團購菜單快照核價並建立參與者的個人訂單。"""
@@ -973,6 +1019,9 @@ async def submit_group_order(
             if user_id is not None
             else f"guest:{order.contact_method}:{order.contact_value}"
         )
+        existing_order_number, existing_order_token = _group_order_cookie(
+            request, normalized_code, identity
+        )
         source_ip = request.client.host if request.client else "unknown"
         with protect_order_submission(
             scope=f"group:{normalized_code}",
@@ -980,8 +1029,15 @@ async def submit_group_order(
             identity=identity,
             customer_name=order.customer_name,
             items=[item.model_dump() for item in order.items],
+            check_duplicate=user_id is None and not existing_order_token,
         ):
-            created_order = create_group_order(normalized_code, order, user_id=user_id)
+            created_order = create_group_order(
+                normalized_code,
+                order,
+                user_id=user_id,
+                existing_order_number=existing_order_number,
+                existing_order_access_token=existing_order_token,
+            )
     except DuplicateOrderSubmissionError as error:
         raise HTTPException(
             status_code=409,
@@ -992,6 +1048,27 @@ async def submit_group_order(
             status_code=429,
             detail="短時間內送單次數過多，請稍後再試。",
             headers={"Retry-After": str(error.retry_after_seconds)},
+        ) from error
+    except GroupOrderAlreadyExistsError as error:
+        if error.can_update:
+            detail = {
+                "code": "ORDER_ACTION_REQUIRED",
+                "message": "這個身分在本團購已有訂單，請選擇加購或修改原訂單。",
+                "public_order_number": error.public_order_number,
+            }
+        else:
+            detail = {
+                "code": "ORDER_ALREADY_EXISTS",
+                "message": (
+                    "這個聯絡方式在本團購已有訂單。為保護訂購者，"
+                    "請使用第一次送單的裝置或原個人訂單連結處理。"
+                ),
+            }
+        raise HTTPException(status_code=409, detail=detail) from error
+    except GroupOrderAccessDeniedError as error:
+        raise HTTPException(
+            status_code=403,
+            detail="無法修改原訂單，請使用第一次送單的裝置或登入原帳號。",
         ) from error
     except GroupNotFoundError as error:
         raise HTTPException(
@@ -1012,9 +1089,22 @@ async def submit_group_order(
         ) from error
 
     order_number = created_order.public_order_number
+    response.status_code = 200 if created_order.was_updated else 201
+    _remember_group_order(
+        response,
+        request,
+        normalized_code,
+        identity,
+        order_number,
+        created_order.order_access_token,
+    )
     return GroupOrderCreateResponse(
         success=True,
-        message="訂單已成功送出，請保存個人訂單連結。",
+        message=(
+            "原訂單已更新，訂單編號保持不變。"
+            if created_order.was_updated
+            else "訂單已成功送出，請保存個人訂單連結。"
+        ),
         public_order_number=order_number,
         order_url=(
             f"/groups/{normalized_code}/orders/{order_number}"

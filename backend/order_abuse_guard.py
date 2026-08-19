@@ -37,7 +37,7 @@ class OrderRateLimitExceededError(Exception):
 @dataclass(frozen=True)
 class _Reservation:
     rate_key: str
-    duplicate_key: str
+    duplicate_key: str | None
     timestamp: float
 
 
@@ -94,6 +94,7 @@ class OrderAbuseGuard:
         identity: str,
         customer_name: str,
         items: Sequence[dict],
+        check_duplicate: bool = True,
     ) -> _Reservation:
         """原子檢查並保留一次送單；成功寫入後保留短期指紋。"""
         now = time.monotonic()
@@ -102,7 +103,7 @@ class OrderAbuseGuard:
 
         with self._lock:
             self._cleanup(now)
-            if duplicate_key in self._duplicate_events:
+            if check_duplicate and duplicate_key in self._duplicate_events:
                 raise DuplicateOrderSubmissionError
 
             timestamps = self._rate_events.setdefault(source_key, deque())
@@ -113,8 +114,10 @@ class OrderAbuseGuard:
                 raise OrderRateLimitExceededError(retry_after)
 
             timestamps.append(now)
-            self._duplicate_events[duplicate_key] = now
-            return _Reservation(source_key, duplicate_key, now)
+            reserved_duplicate_key = duplicate_key if check_duplicate else None
+            if reserved_duplicate_key is not None:
+                self._duplicate_events[reserved_duplicate_key] = now
+            return _Reservation(source_key, reserved_duplicate_key, now)
 
     def release(self, reservation: _Reservation) -> None:
         """下游建立失敗時撤銷保留，避免一般系統錯誤消耗限制。"""
@@ -127,7 +130,11 @@ class OrderAbuseGuard:
                     pass
                 if not timestamps:
                     self._rate_events.pop(reservation.rate_key, None)
-            if self._duplicate_events.get(reservation.duplicate_key) == reservation.timestamp:
+            if (
+                reservation.duplicate_key is not None
+                and self._duplicate_events.get(reservation.duplicate_key)
+                == reservation.timestamp
+            ):
                 self._duplicate_events.pop(reservation.duplicate_key, None)
 
 
@@ -142,6 +149,7 @@ def protect_order_submission(
     identity: str,
     customer_name: str,
     items: Sequence[dict],
+    check_duplicate: bool = True,
 ) -> Iterator[None]:
     """建立失敗會自動撤銷保留；成功時保留防重複與速率紀錄。"""
     reservation = ORDER_ABUSE_GUARD.reserve(
@@ -150,6 +158,7 @@ def protect_order_submission(
         identity=identity,
         customer_name=customer_name,
         items=items,
+        check_duplicate=check_duplicate,
     )
     try:
         yield

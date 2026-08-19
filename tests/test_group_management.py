@@ -50,13 +50,16 @@ class GroupManagementTests(unittest.TestCase):
 
         with patch.dict(os.environ, {"DATABASE_URL": self.database_url}):
             with TestClient(app) as client:
-                for name, quantity, note in (("小美", 1, "小辣"), ("小華", 2, "不辣")):
+                for name, quantity, note, contact_value in (
+                    ("小美", 1, "小辣", "0912345678"),
+                    ("小華", 2, "不辣", "0987654321"),
+                ):
                     response = client.post(
                         "/api/groups/ABC234/orders",
                         json={
                             "customer_name": name,
                             "contact_method": "phone",
-                            "contact_value": "0912345678",
+                            "contact_value": contact_value,
                             "items": [
                                 {
                                     "item_id": "item-a-a",

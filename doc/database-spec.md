@@ -92,6 +92,12 @@ sqlite:///./app.db
 
 既有資料函式同時支援兩種資料庫：SQLite 保留 `?` 參數、外鍵 PRAGMA 與舊資料安全升級；PostgreSQL 透過 Psycopg 使用 `%s` 參數、`BIGSERIAL` 主鍵及送單流水號列鎖。兩種模式都維持單一交易寫入訂單主表與全部明細。
 
+### 7.1 同一團購身分的單一目前訂單
+
+團購重複身分沿用既有 `orders.user_id` 或訪客 `guest_contact_method`＋`guest_contact_value` 查找，不新增資料表或修改 schema。第一次建立、後續加購／修改及團購流水號都在同一資料庫交易內進行；PostgreSQL 鎖定團購列，SQLite 使用 `BEGIN IMMEDIATE`，避免同時請求各自建立新編號。
+
+加購／修改會更新既有 `orders` 主列、刪除後重建該張訂單的 `order_items`，不新增另一張訂單，也不增加 `next_order_sequence`。既有歷史重複資料不自動合併或刪除；新規則只約束更新後的新送單。店家訂單不套用此長期唯一規則。
+
 ## 8. 本階段限制
 
 - 已可透過 `GET /api/admin/orders` 讀取訂單及完整明細，並由 `/admin` 簡易管理後台顯示。

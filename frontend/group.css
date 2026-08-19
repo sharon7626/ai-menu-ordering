@@ -405,6 +405,49 @@ button {
   font-weight: 900;
 }
 
+.repeat-order-dialog {
+  width: min(92vw, 32rem);
+  padding: 0;
+  border: 1px solid #d8cbbb;
+  border-radius: 1.25rem;
+  color: #28251f;
+  background: #fffdf8;
+  box-shadow: 0 1.5rem 4rem rgba(37, 45, 36, 0.24);
+}
+
+.repeat-order-dialog::backdrop {
+  background: rgba(34, 39, 32, 0.52);
+  backdrop-filter: blur(3px);
+}
+
+.repeat-order-dialog form {
+  display: grid;
+  gap: 1rem;
+  padding: clamp(1.4rem, 5vw, 2rem);
+}
+
+.repeat-order-dialog h2,
+.repeat-order-dialog p,
+.repeat-order-dialog small {
+  margin: 0;
+}
+
+.repeat-order-dialog small {
+  color: #6d6259;
+  line-height: 1.5;
+}
+
+.repeat-order-actions {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.repeat-order-actions .secondary {
+  color: #315c4b;
+  background: transparent;
+  border: 1px solid #315c4b;
+}
+
 .menu-item h4,
 .menu-item p {
   margin: 0;
