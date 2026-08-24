@@ -54,13 +54,16 @@ class StoreManagementTests(unittest.TestCase):
         *,
         quantity: int = 2,
         note: str = "",
+        contact_value: str = "0912345678",
+        edit_code: str = "246810",
     ) -> dict:
         response = client.post(
             f"/api/stores/{slug}/orders",
             json={
                 "customer_name": name,
                 "contact_method": "phone",
-                "contact_value": "0912345678",
+                "contact_value": contact_value,
+                "edit_code": edit_code,
                 "items": [
                     {"item_id": "item-a-a", "quantity": quantity, "note": note}
                 ],
@@ -88,6 +91,8 @@ class StoreManagementTests(unittest.TestCase):
                     first["public_slug"],
                     "小明",
                     quantity=1,
+                    contact_value="0987654321",
+                    edit_code="135790",
                 )
                 self.create_order(client, second["public_slug"], "不應出現")
 
@@ -176,7 +181,14 @@ class StoreManagementTests(unittest.TestCase):
                 store, token = self.create_store(client, "表格店", "雞腿便當")
                 slug = store["public_slug"]
                 self.create_order(client, slug, "小美", quantity=2, note="少飯")
-                self.create_order(client, slug, "小華", quantity=1)
+                self.create_order(
+                    client,
+                    slug,
+                    "小華",
+                    quantity=1,
+                    contact_value="0987654321",
+                    edit_code="135790",
+                )
 
                 response = client.get(
                     f"/api/stores/{slug}/management.xlsx",

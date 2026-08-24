@@ -7,12 +7,14 @@ from pathlib import Path
 from backend.database import (
     AccountClaimDeniedError,
     StoreOrderAccessDeniedError,
+    StoreOrderEditCodeDeniedError,
     claim_order_for_user,
+    get_guest_store_order_for_recovery,
     get_store_order_for_access_check,
     save_store_order,
 )
 from backend.group_orders import hash_secret_token
-from backend.schemas import StoreOrderCreateRequest
+from backend.schemas import StoreOrderCreateRequest, StoreOrderRecoveryRequest
 
 
 @dataclass(frozen=True)
@@ -23,6 +25,7 @@ class CreatedStoreOrder:
     total_amount: int
     created_at: datetime
     items: list[dict]
+    was_updated: bool
 
 
 def create_store_order(
@@ -30,8 +33,10 @@ def create_store_order(
     order: StoreOrderCreateRequest,
     database_path: Path | None = None,
     user_id: int | None = None,
+    existing_order_number: str | None = None,
+    existing_order_access_token: str | None = None,
 ) -> CreatedStoreOrder:
-    """建立店家顧客訂單，價格由店家目前菜單重新計算。"""
+    """建立或更新店家顧客訂單，價格由目前菜單重新計算。"""
     order_access_token = secrets.token_urlsafe(32)
     created_at = datetime.now(timezone.utc)
     saved_order = save_store_order(
@@ -43,6 +48,18 @@ def create_store_order(
         user_id=user_id,
         guest_contact_method=order.contact_method if user_id is None else None,
         guest_contact_value=order.contact_value if user_id is None else None,
+        guest_edit_code_hash=(
+            hash_secret_token(order.edit_code)
+            if user_id is None and order.edit_code
+            else None
+        ),
+        repeat_action=order.repeat_action,
+        existing_order_number=existing_order_number,
+        existing_order_access_token_hash=(
+            hash_secret_token(existing_order_access_token)
+            if existing_order_access_token
+            else None
+        ),
         database_path=database_path,
     )
     return CreatedStoreOrder(
@@ -52,7 +69,29 @@ def create_store_order(
         total_amount=saved_order["total_amount"],
         created_at=saved_order["created_at"],
         items=saved_order["items"],
+        was_updated=saved_order["was_updated"],
     )
+
+
+def recover_guest_store_order(
+    public_slug: str,
+    recovery: StoreOrderRecoveryRequest,
+    database_path: Path | None = None,
+) -> dict:
+    """以聯絡方式與修改碼驗證訪客，成功才回傳原店家訂單。"""
+    order = get_guest_store_order_for_recovery(
+        public_slug=public_slug,
+        guest_contact_method=recovery.contact_method,
+        guest_contact_value=recovery.contact_value,
+        database_path=database_path,
+    )
+    if order is None or not order["guest_edit_code_hash"]:
+        raise StoreOrderEditCodeDeniedError
+    received_hash = hash_secret_token(recovery.edit_code)
+    if not hmac.compare_digest(order["guest_edit_code_hash"], received_hash):
+        raise StoreOrderEditCodeDeniedError
+    del order["guest_edit_code_hash"]
+    return order
 
 
 def get_personal_store_order(

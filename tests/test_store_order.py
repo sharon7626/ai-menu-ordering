@@ -54,18 +54,25 @@ class StoreOrderTests(unittest.TestCase):
         slug: str,
         name: str,
         first_quantity: int = 1,
+        contact_value: str = "0912345678",
+        edit_code: str = "246810",
+        repeat_action: str | None = None,
     ):
+        payload = {
+            "customer_name": name,
+            "contact_method": "phone",
+            "contact_value": contact_value,
+            "edit_code": edit_code,
+            "items": [
+                {"item_id": "item-a-a", "quantity": first_quantity},
+                {"item_id": "item-a-b", "quantity": 1},
+            ],
+        }
+        if repeat_action is not None:
+            payload["repeat_action"] = repeat_action
         return client.post(
             f"/api/stores/{slug}/orders",
-            json={
-                "customer_name": name,
-                "contact_method": "phone",
-                "contact_value": "0912345678",
-                "items": [
-                    {"item_id": "item-a-a", "quantity": first_quantity},
-                    {"item_id": "item-a-b", "quantity": 1},
-                ],
-            },
+            json=payload,
         )
 
     def test_two_customers_receive_distinct_orders_and_own_private_views(self) -> None:
@@ -74,7 +81,9 @@ class StoreOrderTests(unittest.TestCase):
                 store = self.create_store(client, "安心食堂")
                 slug = store["public_slug"]
                 first = self.post_order(client, slug, "小美", 2)
-                second = self.post_order(client, slug, "小明", 1)
+                second = self.post_order(
+                    client, slug, "小明", 1, contact_value="0987654321"
+                )
 
                 self.assertEqual(first.status_code, 201)
                 self.assertEqual(second.status_code, 201)
@@ -122,6 +131,7 @@ class StoreOrderTests(unittest.TestCase):
                         "customer_name": "顧客乙",
                         "contact_method": "phone",
                         "contact_value": "0912345678",
+                        "edit_code": "246810",
                         "items": [{"item_id": "item-not-found", "quantity": 1}],
                     },
                 )
@@ -151,6 +161,70 @@ class StoreOrderTests(unittest.TestCase):
 
         self.assertEqual(rejected.status_code, 409)
         self.assertEqual(sequence, 1)
+
+    def test_same_guest_can_add_or_replace_without_creating_new_order(self) -> None:
+        with patch.dict(os.environ, {"DATABASE_URL": self.database_url}):
+            with TestClient(app) as client:
+                store = self.create_store(client, "同單測試店")
+                slug = store["public_slug"]
+                first = self.post_order(client, slug, "小美", 1)
+                required = self.post_order(client, slug, "小美", 2)
+                added = self.post_order(
+                    client, slug, "小美", 2, repeat_action="add"
+                )
+                replaced = self.post_order(
+                    client, slug, "小美", 1, repeat_action="replace"
+                )
+
+                connection = sqlite3.connect(self.database_path)
+                order_count = connection.execute(
+                    "SELECT COUNT(*) FROM orders WHERE store_profile_id IS NOT NULL"
+                ).fetchone()[0]
+                connection.close()
+
+        self.assertEqual(first.status_code, 201)
+        self.assertEqual(required.status_code, 409)
+        self.assertEqual(required.json()["detail"]["code"], "ORDER_ACTION_REQUIRED")
+        self.assertEqual(added.status_code, 200)
+        self.assertEqual(replaced.status_code, 200)
+        self.assertEqual(
+            first.json()["public_order_number"], added.json()["public_order_number"]
+        )
+        self.assertEqual(
+            first.json()["public_order_number"], replaced.json()["public_order_number"]
+        )
+        self.assertEqual(added.json()["total_amount"], 320)
+        self.assertEqual(replaced.json()["total_amount"], 115)
+        self.assertEqual(order_count, 1)
+
+    def test_guest_can_recover_on_another_device_with_six_digit_code(self) -> None:
+        with patch.dict(os.environ, {"DATABASE_URL": self.database_url}):
+            with TestClient(app) as client:
+                store = self.create_store(client, "跨裝置測試店")
+                slug = store["public_slug"]
+                first = self.post_order(client, slug, "小美", 1)
+                client.cookies.clear()
+                blocked = self.post_order(client, slug, "小美", 2, edit_code="135790")
+                recovered = client.post(
+                    f"/api/stores/{slug}/orders/recover",
+                    json={
+                        "contact_method": "phone",
+                        "contact_value": "0912345678",
+                        "edit_code": "246810",
+                    },
+                )
+                updated = self.post_order(
+                    client, slug, "小美", 2, repeat_action="replace"
+                )
+
+        self.assertEqual(first.status_code, 201)
+        self.assertEqual(blocked.status_code, 409)
+        self.assertEqual(blocked.json()["detail"]["code"], "ORDER_ALREADY_EXISTS")
+        self.assertEqual(recovered.status_code, 200)
+        self.assertEqual(updated.status_code, 200)
+        self.assertEqual(
+            first.json()["public_order_number"], updated.json()["public_order_number"]
+        )
 
     def test_personal_page_contains_no_order_or_token_before_authorization(self) -> None:
         with patch.dict(os.environ, {"DATABASE_URL": self.database_url}):

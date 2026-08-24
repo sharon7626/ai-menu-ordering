@@ -22,7 +22,9 @@ from backend.database import (
     StoreManagementAccessDeniedError,
     StoreInactiveError,
     StoreNotFoundError,
+    StoreOrderAlreadyExistsError,
     StoreOrderAccessDeniedError,
+    StoreOrderEditCodeDeniedError,
     StoreOrderValidationError,
     get_orders_with_items,
     get_public_group_menu,
@@ -109,6 +111,8 @@ from backend.schemas import (
     StoreManagementResponse,
     StoreOrderCreateRequest,
     StoreOrderCreateResponse,
+    StoreOrderRecoveryRequest,
+    StoreOrderRecoveryResponse,
 )
 from backend.stores import (
     claim_store,
@@ -123,6 +127,7 @@ from backend.store_orders import (
     create_store_order,
     get_personal_store_order,
     get_store_order_for_user,
+    recover_guest_store_order,
 )
 
 
@@ -187,6 +192,48 @@ def _remember_group_order(
     )
     response.set_cookie(
         key=_group_order_cookie_name(public_code, identity),
+        value=f"{public_order_number}.{order_access_token}",
+        max_age=ORDER_COOKIE_MAX_AGE,
+        httponly=True,
+        secure=is_https,
+        samesite="lax",
+        path="/",
+    )
+
+
+def _store_order_cookie_name(public_slug: str, identity: str) -> str:
+    """以不可逆身分指紋區隔同一瀏覽器中的不同店家訂單。"""
+    identity_hash = hashlib.sha256(identity.encode("utf-8")).hexdigest()[:16]
+    return f"seat_store_{public_slug.lower()}_{identity_hash}"
+
+
+def _store_order_cookie(
+    request: Request, public_slug: str, identity: str
+) -> tuple[str | None, str | None]:
+    raw_value = request.cookies.get(_store_order_cookie_name(public_slug, identity), "")
+    if "." not in raw_value:
+        return None, None
+    public_order_number, order_access_token = raw_value.split(".", 1)
+    if not public_order_number or not order_access_token:
+        return None, None
+    return public_order_number, order_access_token
+
+
+def _remember_store_order(
+    response: Response,
+    request: Request,
+    public_slug: str,
+    identity: str,
+    public_order_number: str,
+    order_access_token: str,
+) -> None:
+    forwarded_scheme = request.headers.get("x-forwarded-proto", "")
+    is_https = (
+        request.url.scheme == "https"
+        or forwarded_scheme.split(",")[0].strip().lower() == "https"
+    )
+    response.set_cookie(
+        key=_store_order_cookie_name(public_slug, identity),
         value=f"{public_order_number}.{order_access_token}",
         max_age=ORDER_COOKIE_MAX_AGE,
         httponly=True,
@@ -784,6 +831,50 @@ async def get_store_qr(public_slug: str, request: Request) -> Response:
 
 
 @app.post(
+    "/api/stores/{public_slug}/orders/recover",
+    response_model=StoreOrderRecoveryResponse,
+)
+async def recover_store_order(
+    public_slug: str,
+    recovery: StoreOrderRecoveryRequest,
+    request: Request,
+) -> StoreOrderRecoveryResponse:
+    """讓未登入訪客以聯絡方式與六碼修改碼載入店家原訂單。"""
+    slug = public_slug.strip().lower()
+    source_ip = request.client.host if request.client else "unknown"
+    identity = f"guest:{recovery.contact_method}:{recovery.contact_value}"
+    scope = f"store:{slug}"
+    try:
+        order = recover_guest_store_order(slug, recovery)
+        clear_edit_code_failures(
+            scope=scope, source_ip=source_ip, identity=identity
+        )
+        return StoreOrderRecoveryResponse(**order)
+    except StoreOrderEditCodeDeniedError as error:
+        try:
+            record_edit_code_failure(
+                scope=scope, source_ip=source_ip, identity=identity
+            )
+        except OrderRateLimitExceededError as rate_error:
+            raise HTTPException(
+                status_code=429,
+                detail="修改碼嘗試次數過多，請稍後再試。",
+                headers={"Retry-After": str(rate_error.retry_after_seconds)},
+            ) from rate_error
+        raise HTTPException(
+            status_code=403,
+            detail=(
+                "找不到可修改的訂單，或修改碼不正確。"
+                "較早建立、尚未設定修改碼的訂單仍需使用原個人連結。"
+            ),
+        ) from error
+    except DATABASE_ERROR_TYPES as error:
+        raise HTTPException(
+            status_code=500, detail="原訂單暫時無法載入，請稍後再試。"
+        ) from error
+
+
+@app.post(
     "/api/stores/{public_slug}/orders",
     response_model=StoreOrderCreateResponse,
     status_code=201,
@@ -792,9 +883,10 @@ async def submit_store_order(
     public_slug: str,
     order: StoreOrderCreateRequest,
     request: Request,
+    response: Response,
     authorization: Annotated[str | None, Header()] = None,
 ) -> StoreOrderCreateResponse:
-    """依店家目前菜單核價並建立顧客的個人訂單。"""
+    """依店家目前菜單核價並建立或更新顧客的個人訂單。"""
     slug = public_slug.strip().lower()
     try:
         user_id = _resolve_optional_app_user_id(authorization)
@@ -803,6 +895,9 @@ async def submit_store_order(
             if user_id is not None
             else f"guest:{order.contact_method}:{order.contact_value}"
         )
+        existing_order_number, existing_order_token = _store_order_cookie(
+            request, slug, identity
+        )
         source_ip = request.client.host if request.client else "unknown"
         with protect_order_submission(
             scope=f"store:{slug}",
@@ -810,8 +905,15 @@ async def submit_store_order(
             identity=identity,
             customer_name=order.customer_name,
             items=[item.model_dump() for item in order.items],
+            check_duplicate=user_id is None and not existing_order_token,
         ):
-            created_order = create_store_order(slug, order, user_id=user_id)
+            created_order = create_store_order(
+                slug,
+                order,
+                user_id=user_id,
+                existing_order_number=existing_order_number,
+                existing_order_access_token=existing_order_token,
+            )
     except DuplicateOrderSubmissionError as error:
         raise HTTPException(
             status_code=409,
@@ -823,6 +925,43 @@ async def submit_store_order(
             detail="短時間內送單次數過多，請稍後再試。",
             headers={"Retry-After": str(error.retry_after_seconds)},
         ) from error
+    except StoreOrderAlreadyExistsError as error:
+        if error.can_update:
+            detail = {
+                "code": "ORDER_ACTION_REQUIRED",
+                "message": "這個身分在本店已有訂單，請選擇加購或修改原訂單。",
+                "public_order_number": error.public_order_number,
+            }
+        else:
+            detail = {
+                "code": "ORDER_ALREADY_EXISTS",
+                "message": (
+                    "這個聯絡方式在本店已有訂單。為保護訂購者，"
+                    "請輸入第一次送單設定的 6 碼修改碼載入原訂單。"
+                ),
+            }
+        raise HTTPException(status_code=409, detail=detail) from error
+    except StoreOrderEditCodeDeniedError as error:
+        try:
+            record_edit_code_failure(
+                scope=f"store:{slug}",
+                source_ip=source_ip,
+                identity=identity,
+            )
+        except OrderRateLimitExceededError as rate_error:
+            raise HTTPException(
+                status_code=429,
+                detail="修改碼嘗試次數過多，請稍後再試。",
+                headers={"Retry-After": str(rate_error.retry_after_seconds)},
+            ) from rate_error
+        raise HTTPException(
+            status_code=403, detail="修改碼不正確，無法變更原訂單。"
+        ) from error
+    except StoreOrderAccessDeniedError as error:
+        raise HTTPException(
+            status_code=403,
+            detail="無法修改原訂單，請使用第一次送單的裝置或登入原帳號。",
+        ) from error
     except StoreNotFoundError as error:
         raise HTTPException(status_code=404, detail="找不到這家店，請確認網址是否正確") from error
     except StoreInactiveError as error:
@@ -833,9 +972,22 @@ async def submit_store_order(
         raise HTTPException(status_code=500, detail="訂單儲存失敗，請稍後再試") from error
 
     order_number = created_order.public_order_number
+    response.status_code = 200 if created_order.was_updated else 201
+    _remember_store_order(
+        response,
+        request,
+        slug,
+        identity,
+        order_number,
+        created_order.order_access_token,
+    )
     return StoreOrderCreateResponse(
         success=True,
-        message="訂單已成功送出，請保存個人訂單連結。",
+        message=(
+            "原訂單已更新，訂單編號保持不變。"
+            if created_order.was_updated
+            else "訂單已成功送出，請保存個人訂單連結。"
+        ),
         public_order_number=order_number,
         order_url=(
             f"/stores/{slug}/orders/{order_number}"

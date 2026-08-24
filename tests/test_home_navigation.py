@@ -122,7 +122,7 @@ class HomeNavigationTests(unittest.TestCase):
             group_html,
         )
         self.assertIn(
-            '<script src="/frontend/store.js?v=20260819-2" defer></script>',
+            '<script src="/frontend/store.js?v=20260824-1" defer></script>',
             store_html,
         )
         self.assertIn("window.AppAuth?.getAuthorizationHeaders", group_script)

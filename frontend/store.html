@@ -7,11 +7,11 @@
     <title>店家菜單｜席間</title>
     <link rel="stylesheet" href="/frontend/design-system.css?v=20260811-1">
     <link rel="stylesheet" href="/frontend/navigation.css?v=20260811-3">
-    <link rel="stylesheet" href="/frontend/store.css?v=20260819-2">
+    <link rel="stylesheet" href="/frontend/store.css?v=20260824-1">
     <link rel="stylesheet" href="/frontend/brand-pages.css?v=20260811-1">
     <script src="/frontend/menu-variants.js?v=20260808-1" defer></script>
     <script src="/frontend/auth.js?v=20260811-1" type="module"></script>
-    <script src="/frontend/store.js?v=20260819-2" defer></script>
+    <script src="/frontend/store.js?v=20260824-1" defer></script>
   </head>
   <body>
     <nav class="top-home-nav" aria-label="主要導覽"><a class="top-home-brand" href="/" aria-label="席間首頁"><span class="top-home-brand-mark" aria-hidden="true">席</span><span class="top-home-brand-name">席間<small>MENU · ORDER · TOGETHER</small></span></a></nav>
@@ -57,6 +57,24 @@
                   <label id="contact-value-label" for="contact-value">手機號碼</label>
                   <input id="contact-value" name="contact-value" type="tel" inputmode="tel" autocomplete="tel" maxlength="254" placeholder="例如：0912345678">
                   <small>僅供店家辨識訂購者，不會顯示在公開菜單。</small>
+                  <label for="edit-code">6 碼訂單修改碼</label>
+                  <input
+                    id="edit-code"
+                    name="edit-code"
+                    type="password"
+                    inputmode="numeric"
+                    autocomplete="off"
+                    minlength="6"
+                    maxlength="6"
+                    pattern="[0-9]{6}"
+                    placeholder="請設定 6 碼數字"
+                  >
+                  <small>
+                    第一次送單請自行設定；之後換手機或瀏覽器時，可用同一聯絡方式與修改碼找回原訂單。
+                  </small>
+                  <button id="recover-order" class="recover-order-button" type="button">
+                    載入並修改原訂單
+                  </button>
                 </div>
               </div>
               <label class="order-honeypot" aria-hidden="true">
@@ -82,6 +100,23 @@
           </aside>
         </div>
       </div>
+
+      <dialog id="repeat-order-dialog" class="repeat-order-dialog" aria-labelledby="repeat-order-title">
+        <form method="dialog">
+          <p class="eyebrow">已找到你的原訂單</p>
+          <h2 id="repeat-order-title">這次要加購，還是修改？</h2>
+          <p>
+            訂單 <strong id="repeat-order-number"></strong> 會保留原編號，
+            不會再建立第二張訂單。
+          </p>
+          <div class="repeat-order-actions">
+            <button type="submit" value="add">加購到原訂單</button>
+            <button type="submit" value="replace">用這次內容取代</button>
+            <button class="secondary" type="submit" value="cancel">先不要送出</button>
+          </div>
+          <small>「加購」會累加數量；「取代」會以目前購物車內容更新原訂單。</small>
+        </form>
+      </dialog>
     </main>
   </body>
 </html>

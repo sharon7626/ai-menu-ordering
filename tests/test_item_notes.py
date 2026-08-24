@@ -120,6 +120,7 @@ class ItemNoteTests(unittest.TestCase):
                         "customer_name": "小華",
                         "contact_method": "email",
                         "contact_value": "xiaohua@example.com",
+                        "edit_code": "246810",
                         "items": [
                             {"item_id": "item-a-a", "quantity": 1, "note": "小辣"}
                         ],

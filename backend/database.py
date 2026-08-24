@@ -404,8 +404,21 @@ class StoreOrderValidationError(ValueError):
     """訂單選擇與店家目前菜單不一致。"""
 
 
+class StoreOrderAlreadyExistsError(ValueError):
+    """同一身分在同一店家已有訂單。"""
+
+    def __init__(self, public_order_number: str, can_update: bool) -> None:
+        super().__init__("store order already exists")
+        self.public_order_number = public_order_number
+        self.can_update = can_update
+
+
 class StoreOrderAccessDeniedError(ValueError):
     """店家個人訂單不存在或查看 Token 不正確。"""
+
+
+class StoreOrderEditCodeDeniedError(ValueError):
+    """店家訪客訂單不存在、沒有修改碼或修改碼不正確。"""
 
 
 class AccountClaimDeniedError(ValueError):
@@ -2004,9 +2017,13 @@ def save_store_order(
     user_id: int | None = None,
     guest_contact_method: str | None = None,
     guest_contact_value: str | None = None,
+    guest_edit_code_hash: str | None = None,
+    repeat_action: str | None = None,
+    existing_order_number: str | None = None,
+    existing_order_access_token_hash: str | None = None,
     database_path: Path | None = None,
 ) -> dict:
-    """依店家目前菜單重新核價，並在單一交易中建立個人訂單。"""
+    """依店家目前菜單核價，建立或更新同一身分的個人訂單。"""
     connection = connect_database(database_path)
     try:
         connection.execute("BEGIN IMMEDIATE")
@@ -2061,6 +2078,151 @@ def save_store_order(
                 "未登入時，請提供手機號碼或 Email 以辨識訂購者"
             )
 
+        if user_id is not None:
+            existing_order = connection.execute(
+                """
+                SELECT id, public_order_number, order_access_token_hash,
+                       guest_edit_code_hash, created_at
+                FROM orders
+                WHERE store_profile_id = ? AND user_id = ?
+                ORDER BY id DESC
+                LIMIT 1
+                """,
+                (store_row["id"], user_id),
+            ).fetchone()
+        else:
+            existing_order = connection.execute(
+                """
+                SELECT id, public_order_number, order_access_token_hash,
+                       guest_edit_code_hash, created_at
+                FROM orders
+                WHERE store_profile_id = ?
+                  AND user_id IS NULL
+                  AND guest_contact_method = ?
+                  AND guest_contact_value = ?
+                ORDER BY id DESC
+                LIMIT 1
+                """,
+                (store_row["id"], guest_contact_method, guest_contact_value),
+            ).fetchone()
+
+        if existing_order is not None:
+            token_matches = bool(
+                existing_order_access_token_hash
+                and hmac.compare_digest(
+                    existing_order["order_access_token_hash"],
+                    existing_order_access_token_hash,
+                )
+            )
+            edit_code_matches = bool(
+                guest_edit_code_hash
+                and existing_order["guest_edit_code_hash"]
+                and hmac.compare_digest(
+                    existing_order["guest_edit_code_hash"], guest_edit_code_hash
+                )
+            )
+            can_update = user_id is not None or token_matches or edit_code_matches
+            if repeat_action is None:
+                raise StoreOrderAlreadyExistsError(
+                    existing_order["public_order_number"], can_update
+                )
+            if (
+                not can_update
+                or (
+                    existing_order_number
+                    and existing_order_number != existing_order["public_order_number"]
+                )
+            ):
+                if user_id is None and guest_edit_code_hash:
+                    raise StoreOrderEditCodeDeniedError
+                raise StoreOrderAccessDeniedError
+
+            if repeat_action == "add":
+                existing_items = connection.execute(
+                    """
+                    SELECT item_id, item_name, unit_price, quantity, note, subtotal
+                    FROM order_items
+                    WHERE order_id = ?
+                    ORDER BY id
+                    """,
+                    (existing_order["id"],),
+                ).fetchall()
+                merged_items = {
+                    (row["item_id"], row["note"]): {
+                        "item_id": row["item_id"],
+                        "item_name": row["item_name"],
+                        "unit_price": row["unit_price"],
+                        "quantity": row["quantity"],
+                        "note": row["note"],
+                        "subtotal": row["subtotal"],
+                    }
+                    for row in existing_items
+                }
+                for item in stored_items:
+                    item_key = (item["item_id"], item["note"])
+                    current = merged_items.get(item_key)
+                    if current is None:
+                        merged_items[item_key] = item
+                        continue
+                    current["quantity"] += item["quantity"]
+                    current["subtotal"] = current["unit_price"] * current["quantity"]
+                stored_items = list(merged_items.values())
+
+            total_amount = sum(item["subtotal"] for item in stored_items)
+            connection.execute(
+                """
+                UPDATE orders
+                SET order_access_token_hash = ?, customer_name = ?, total_amount = ?
+                WHERE id = ?
+                """,
+                (
+                    order_access_token_hash,
+                    customer_name,
+                    total_amount,
+                    existing_order["id"],
+                ),
+            )
+            connection.execute(
+                "DELETE FROM order_items WHERE order_id = ?",
+                (existing_order["id"],),
+            )
+            connection.executemany(
+                """
+                INSERT INTO order_items (
+                    order_id, item_id, item_name, unit_price, quantity, note, subtotal
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                [
+                    (
+                        existing_order["id"],
+                        item["item_id"],
+                        item["item_name"],
+                        item["unit_price"],
+                        item["quantity"],
+                        item["note"],
+                        item["subtotal"],
+                    )
+                    for item in stored_items
+                ],
+            )
+            connection.commit()
+            return {
+                "public_order_number": existing_order["public_order_number"],
+                "customer_name": customer_name,
+                "total_amount": total_amount,
+                "created_at": (
+                    existing_order["created_at"]
+                    if isinstance(existing_order["created_at"], datetime)
+                    else datetime.fromisoformat(existing_order["created_at"])
+                ),
+                "items": stored_items,
+                "was_updated": True,
+            }
+
+        if user_id is None and not guest_edit_code_hash:
+            raise StoreOrderValidationError("未登入時，請設定 6 碼訂單修改碼")
+
         sequence = store_row["next_order_sequence"]
         public_order_number = f"S-{public_slug.upper()}-{sequence:03d}"
         total_amount = sum(item["subtotal"] for item in stored_items)
@@ -2083,10 +2245,11 @@ def save_store_order(
                 customer_name,
                 guest_contact_method,
                 guest_contact_value,
+                guest_edit_code_hash,
                 total_amount,
                 created_at
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 store_row["id"],
@@ -2096,6 +2259,7 @@ def save_store_order(
                 customer_name,
                 guest_contact_method,
                 guest_contact_value,
+                guest_edit_code_hash,
                 total_amount,
                 created_at.isoformat(),
             ),
@@ -2130,6 +2294,7 @@ def save_store_order(
             "total_amount": total_amount,
             "created_at": created_at,
             "items": stored_items,
+            "was_updated": False,
         }
     except Exception:
         connection.rollback()
@@ -2189,6 +2354,82 @@ def get_store_order_for_access_check(
         "customer_name": first["customer_name"],
         "total_amount": first["total_amount"],
         "created_at": first["created_at"],
+        "items": [
+            {
+                "item_id": row["item_id"],
+                "item_name": row["item_name"],
+                "unit_price": row["unit_price"],
+                "quantity": row["quantity"],
+                "note": row["note"],
+                "subtotal": row["subtotal"],
+            }
+            for row in rows
+            if row["item_id"] is not None
+        ],
+    }
+
+
+def get_guest_store_order_for_recovery(
+    *,
+    public_slug: str,
+    guest_contact_method: str,
+    guest_contact_value: str,
+    database_path: Path | None = None,
+) -> dict | None:
+    """依店家與正規化聯絡方式取得訪客訂單，僅供修改碼驗證。"""
+    connection = connect_database(database_path)
+    try:
+        rows = connection.execute(
+            """
+            SELECT
+                orders.public_order_number,
+                orders.guest_edit_code_hash,
+                orders.customer_name,
+                orders.total_amount,
+                order_items.item_id,
+                order_items.item_name,
+                order_items.unit_price,
+                order_items.quantity,
+                order_items.note,
+                order_items.subtotal
+            FROM orders
+            JOIN store_profiles ON store_profiles.id = orders.store_profile_id
+            LEFT JOIN order_items ON order_items.order_id = orders.id
+            WHERE store_profiles.public_slug = ?
+              AND orders.user_id IS NULL
+              AND orders.guest_contact_method = ?
+              AND orders.guest_contact_value = ?
+              AND orders.id = (
+                  SELECT latest_orders.id
+                  FROM orders AS latest_orders
+                  WHERE latest_orders.store_profile_id = store_profiles.id
+                    AND latest_orders.user_id IS NULL
+                    AND latest_orders.guest_contact_method = ?
+                    AND latest_orders.guest_contact_value = ?
+                  ORDER BY latest_orders.id DESC
+                  LIMIT 1
+              )
+            ORDER BY order_items.id
+            """,
+            (
+                public_slug,
+                guest_contact_method,
+                guest_contact_value,
+                guest_contact_method,
+                guest_contact_value,
+            ),
+        ).fetchall()
+    finally:
+        connection.close()
+
+    if not rows:
+        return None
+    first = rows[0]
+    return {
+        "public_order_number": first["public_order_number"],
+        "guest_edit_code_hash": first["guest_edit_code_hash"],
+        "customer_name": first["customer_name"],
+        "total_amount": first["total_amount"],
         "items": [
             {
                 "item_id": row["item_id"],

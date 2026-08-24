@@ -17,14 +17,72 @@ const guestIdentityFields = document.querySelector("#guest-identity-fields");
 const contactMethod = document.querySelector("#contact-method");
 const contactValueLabel = document.querySelector("#contact-value-label");
 const contactValue = document.querySelector("#contact-value");
+const editCode = document.querySelector("#edit-code");
+const recoverOrderButton = document.querySelector("#recover-order");
 const orderWebsite = document.querySelector("#order-website");
 const submitOrder = document.querySelector("#submit-order");
 const orderStatus = document.querySelector("#order-status");
+const repeatOrderDialog = document.querySelector("#repeat-order-dialog");
+const repeatOrderNumber = document.querySelector("#repeat-order-number");
 const itemQuantities = new Map();
 const itemNotes = new Map();
 const menuItemsById = new Map();
+const quantitySetters = new Map();
+const noteInputs = new Map();
 let currentStore = null;
 let isSubmitting = false;
+let recoveredOrderNumber = null;
+
+function errorMessage(result, fallback = "訂單暫時無法送出，請稍後再試。") {
+  if (typeof result?.detail === "string") return result.detail;
+  if (typeof result?.detail?.message === "string") return result.detail.message;
+  return fallback;
+}
+
+function chooseRepeatAction(publicOrderNumber) {
+  repeatOrderNumber.textContent = publicOrderNumber;
+  if (typeof repeatOrderDialog.showModal !== "function") {
+    return Promise.resolve(
+      window.confirm("這個身分已有訂單。按確定加購；按取消則以本次內容取代。")
+        ? "add"
+        : "replace",
+    );
+  }
+  repeatOrderDialog.returnValue = "";
+  repeatOrderDialog.showModal();
+  return new Promise((resolve) => {
+    repeatOrderDialog.addEventListener(
+      "close",
+      () => resolve(repeatOrderDialog.returnValue || "cancel"),
+      { once: true },
+    );
+  });
+}
+
+async function sendStoreOrder(payload, authHeaders) {
+  let response = await fetch(`/api/stores/${currentStore.public_slug}/orders`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...authHeaders },
+    body: JSON.stringify(payload),
+  });
+  let result = await response.json();
+
+  if (response.status === 409 && result.detail?.code === "ORDER_ACTION_REQUIRED") {
+    const action = await chooseRepeatAction(result.detail.public_order_number);
+    if (action === "cancel") {
+      throw new Error("已取消送出，原訂單沒有變更。");
+    }
+    response = await fetch(`/api/stores/${currentStore.public_slug}/orders`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...authHeaders },
+      body: JSON.stringify({ ...payload, repeat_action: action }),
+    });
+    result = await response.json();
+  }
+
+  if (!response.ok) throw new Error(errorMessage(result));
+  return result;
+}
 
 function updateContactField() {
   const usesPhone = contactMethod.value === "phone";
@@ -55,7 +113,15 @@ function validateGuestIdentity() {
   } else if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(value)) {
     throw new Error("請輸入正確的 Email，例如 name@example.com。");
   }
-  return { contact_method: contactMethod.value, contact_value: value };
+  const code = editCode.value.trim();
+  if (!/^\d{6}$/.test(code)) {
+    throw new Error("未登入時，請設定或輸入 6 碼數字的訂單修改碼。");
+  }
+  return {
+    contact_method: contactMethod.value,
+    contact_value: value,
+    edit_code: code,
+  };
 }
 
 function slugFromPath() {
@@ -88,7 +154,11 @@ function selectedItems() {
 function updateSubmitButton() {
   submitOrder.disabled =
     isSubmitting || !currentStore?.active || selectedItems().length === 0;
-  submitOrder.textContent = isSubmitting ? "訂單送出中…" : "送出訂單";
+  submitOrder.textContent = isSubmitting
+    ? "訂單送出中…"
+    : recoveredOrderNumber
+      ? "更新原訂單"
+      : "送出訂單";
 }
 
 function renderCart() {
@@ -142,6 +212,8 @@ function createQuantityControl(item, noteField) {
     renderCart();
   }
 
+  quantitySetters.set(item.id, setQuantity);
+
   decrease.addEventListener("click", () =>
     setQuantity((itemQuantities.get(item.id) ?? 0) - 1),
   );
@@ -167,8 +239,38 @@ function createItemNoteField(item) {
     itemNotes.set(item.id, input.value);
     renderCart();
   });
+  noteInputs.set(item.id, input);
   field.append(label, input);
   return field;
+}
+
+function clearSelections() {
+  quantitySetters.forEach((setQuantity) => setQuantity(0));
+  itemNotes.clear();
+  renderCart();
+}
+
+function loadRecoveredOrder(order) {
+  clearSelections();
+  customerName.value = order.customer_name;
+  order.items.forEach((item) => {
+    const setQuantity = quantitySetters.get(item.item_id);
+    const noteInput = noteInputs.get(item.item_id);
+    if (!setQuantity) return;
+    setQuantity((itemQuantities.get(item.item_id) ?? 0) + item.quantity);
+    if (noteInput) {
+      const previousNote = itemNotes.get(item.item_id) || "";
+      const nextNote = [previousNote, item.note || ""].filter(Boolean).join("／");
+      noteInput.value = nextNote;
+      itemNotes.set(item.item_id, nextNote);
+    }
+  });
+  recoveredOrderNumber = order.public_order_number;
+  renderCart();
+  orderStatus.textContent = `已載入訂單 ${order.public_order_number}。調整餐點後按「更新原訂單」，編號不會改變。`;
+  orderStatus.dataset.state = "success";
+  orderStatus.hidden = false;
+  updateSubmitButton();
 }
 
 function createRegularMenuItem(item, canOrder) {
@@ -249,6 +351,9 @@ function renderStore(store) {
   itemQuantities.clear();
   itemNotes.clear();
   menuItemsById.clear();
+  quantitySetters.clear();
+  noteInputs.clear();
+  recoveredOrderNumber = null;
   orderStatus.hidden = true;
   customerName.value = "";
   let itemCount = 0;
@@ -287,6 +392,34 @@ function renderStore(store) {
   storeContent.hidden = false;
 }
 
+recoverOrderButton.addEventListener("click", async () => {
+  if (!currentStore) return;
+  recoverOrderButton.disabled = true;
+  orderStatus.textContent = "正在驗證修改碼並載入原訂單…";
+  orderStatus.dataset.state = "loading";
+  orderStatus.hidden = false;
+  try {
+    const identity = validateGuestIdentity();
+    const response = await fetch(
+      `/api/stores/${currentStore.public_slug}/orders/recover`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(identity),
+      },
+    );
+    const result = await response.json();
+    if (!response.ok) throw new Error(errorMessage(result, "原訂單無法載入。"));
+    loadRecoveredOrder(result);
+  } catch (error) {
+    orderStatus.textContent = error.message || "原訂單無法載入。";
+    orderStatus.dataset.state = "error";
+    orderStatus.hidden = false;
+  } finally {
+    recoverOrderButton.disabled = false;
+  }
+});
+
 orderForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   if (isSubmitting || !currentStore?.active) return;
@@ -316,40 +449,33 @@ orderForm.addEventListener("submit", async (event) => {
       ? await window.AppAuth.getAuthorizationHeaders()
       : {};
     const identity = authHeaders.Authorization ? {} : validateGuestIdentity();
-    const response = await fetch(`/api/stores/${currentStore.public_slug}/orders`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", ...authHeaders },
-      body: JSON.stringify({
+    const result = await sendStoreOrder(
+      {
         customer_name: name,
         ...identity,
+        ...(recoveredOrderNumber ? { repeat_action: "replace" } : {}),
         website: orderWebsite.value,
         items: selections.map(({ item, quantity, note }) => ({
           item_id: item.id,
           quantity,
           note,
         })),
-      }),
-    });
-    const result = await response.json();
-    if (!response.ok) {
-      throw new Error(
-        typeof result.detail === "string"
-          ? result.detail
-          : "訂單暫時無法送出，請稍後再試。",
-      );
-    }
+      },
+      authHeaders,
+    );
     const orderUrl = new URL(result.order_url, window.location.origin);
     const orderLink = document.createElement("a");
     orderLink.href = orderUrl.href;
     orderLink.textContent = `查看個人訂單 ${result.public_order_number}`;
     orderStatus.replaceChildren(
       document.createTextNode(
-        `訂單已送出！你的訂單編號是 ${result.public_order_number}。 `,
+        `${result.message} 訂單編號是 ${result.public_order_number}。 `,
       ),
       orderLink,
     );
     orderStatus.dataset.state = "success";
     orderStatus.hidden = false;
+    recoveredOrderNumber = null;
     itemQuantities.forEach((_, itemId) => itemQuantities.set(itemId, 0));
     itemNotes.clear();
     menuContent.querySelectorAll(".quantity-control output").forEach((output) => {

@@ -109,6 +109,7 @@ class OrderIdentityTests(unittest.TestCase):
                     json=order(
                         contact_method="email",
                         contact_value="Guest@Example.COM",
+                        edit_code="246810",
                     ),
                 )
                 public_menu = client.get(f"/api/stores/{store['public_slug']}")

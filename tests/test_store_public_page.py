@@ -122,7 +122,7 @@ class StorePublicPageTests(unittest.TestCase):
         self.assertIn("position: static;", mobile_rules)
         self.assertIn("order: 0;", mobile_rules)
         self.assertNotIn("position: sticky;", mobile_rules)
-        self.assertIn("/frontend/store.css?v=20260819-2", page)
+        self.assertIn("/frontend/store.css?v=20260824-1", page)
 
 
 if __name__ == "__main__":

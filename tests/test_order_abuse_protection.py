@@ -57,9 +57,7 @@ def group_payload(
 
 
 def store_payload(**kwargs) -> dict:
-    payload = group_payload(**kwargs)
-    payload.pop("edit_code", None)
-    return payload
+    return group_payload(**kwargs)
 
 
 def store_confirmation() -> dict:
@@ -163,6 +161,7 @@ class OrderAbuseProtectionTests(unittest.TestCase):
                 store = client.post("/api/stores", json=store_confirmation()).json()
                 endpoint = f"/api/stores/{store['public_slug']}/orders"
                 first = client.post(endpoint, json=store_payload())
+                client.cookies.clear()
                 duplicate = client.post(endpoint, json=store_payload())
 
         self.assertEqual(first.status_code, 201)
@@ -174,19 +173,23 @@ class OrderAbuseProtectionTests(unittest.TestCase):
             with TestClient(app) as client:
                 store = client.post("/api/stores", json=store_confirmation()).json()
                 endpoint = f"/api/stores/{store['public_slug']}/orders"
-                accepted = [
-                    client.post(
-                        endpoint,
-                        json=store_payload(name=f"店家顧客{i}", note=f"第{i}筆"),
+                accepted = [client.post(endpoint, json=store_payload(note="第0筆"))]
+                for i in range(1, 5):
+                    accepted.append(
+                        client.post(
+                            endpoint,
+                            json=store_payload(
+                                note=f"第{i}筆", repeat_action="replace"
+                            ),
+                        )
                     )
-                    for i in range(5)
-                ]
                 limited = client.post(
                     endpoint,
-                    json=store_payload(name="第六位顧客", note="第六筆"),
+                    json=store_payload(note="第六筆", repeat_action="replace"),
                 )
 
-        self.assertTrue(all(response.status_code == 201 for response in accepted))
+        self.assertEqual(accepted[0].status_code, 201)
+        self.assertTrue(all(response.status_code == 200 for response in accepted[1:]))
         self.assertEqual(limited.status_code, 429)
         self.assertGreater(int(limited.headers["Retry-After"]), 0)
 
@@ -214,6 +217,10 @@ class OrderAbuseProtectionTests(unittest.TestCase):
 
         self.assertIn('id="order-website"', page)
         self.assertIn("website: orderWebsite.value", script)
+        self.assertIn('id="edit-code"', page)
+        self.assertIn('id="recover-order"', page)
+        self.assertIn("/orders/recover", script)
+        self.assertIn("repeat_action", script)
 
 
 if __name__ == "__main__":

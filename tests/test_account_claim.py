@@ -53,7 +53,8 @@ class AccountClaimTests(unittest.TestCase):
                     json={**ORDER, "edit_code": "246810"},
                 ).json()
                 store_order = client.post(
-                    f"/api/stores/{store['public_slug']}/orders", json=ORDER
+                    f"/api/stores/{store['public_slug']}/orders",
+                    json={**ORDER, "edit_code": "135790"},
                 ).json()
                 management_token = urlsplit(group["management_url"]).fragment.removeprefix("token=")
                 group_order_token = urlsplit(group_order["order_url"]).fragment.removeprefix("token=")

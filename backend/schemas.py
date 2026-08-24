@@ -496,8 +496,13 @@ class StoreMenuUpdateResponse(BaseModel):
 class StoreOrderCreateRequest(GroupOrderCreateRequest):
     """店家顧客送出的最小訂單資料，價格由後端取得。"""
 
-    repeat_action: None = None
-    edit_code: None = None
+
+class StoreOrderRecoveryRequest(GroupOrderRecoveryRequest):
+    """訪客以聯絡方式與六碼修改碼找回同一店家的原訂單。"""
+
+
+class StoreOrderRecoveryResponse(GroupOrderRecoveryResponse):
+    """店家訂單修改碼驗證成功後回傳原訂單。"""
 
 
 class StoreOrderCreateResponse(BaseModel):
